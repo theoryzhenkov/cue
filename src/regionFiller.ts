@@ -1,5 +1,6 @@
 import { DistanceField, calculateDistanceField, extractBoundaries } from './sdf';
 import { HSB, generateDistinctColor } from './color';
+import { COLORS } from './config';
 
 const LINE_THRESHOLD = 50; // Pixels darker than this are considered lines
 const BOUNDARY_ID = 255;   // Reserved ID for boundary pixels
@@ -70,8 +71,10 @@ export function detectRegions(
                 break outer;
             }
 
-            // Assign color for this region
-            colors.push(generateDistinctColor(regionId, 0.6 + Math.random() * 0.2, 0.7 + Math.random() * 0.25));
+            // Assign color for this region using config values
+            const saturation = COLORS.saturationMin + Math.random() * (COLORS.saturationMax - COLORS.saturationMin);
+            const brightness = COLORS.brightnessMin + Math.random() * (COLORS.brightnessMax - COLORS.brightnessMin);
+            colors.push(generateDistinctColor(regionId, saturation, brightness));
 
             // Flood fill this region with the current ID
             fillRegion(ids, visited, width, height, x, y, regionId);

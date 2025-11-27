@@ -1,5 +1,6 @@
 import p5 from 'p5';
 import { HSB, generateDistinctColor, hsbObjToRgb } from './color';
+import { LINES, COLORS } from './config';
 
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
@@ -51,11 +52,14 @@ export function generateEdgeToEdgeLine(p: p5, index: number, width: number, heig
         endEdge = getRandomEdge(p);
     }
 
+    const saturation = COLORS.saturationMin + p.random(COLORS.saturationMax - COLORS.saturationMin);
+    const brightness = COLORS.brightnessMin + p.random(COLORS.brightnessMax - COLORS.brightnessMin);
+
     return {
         start: getPointOnEdge(p, startEdge, width, height),
         end: getPointOnEdge(p, endEdge, width, height),
-        color: generateDistinctColor(index, 0.7 + p.random(0.2), 0.6 + p.random(0.3)),
-        weight: p.random(2, 5),
+        color: generateDistinctColor(index, saturation, brightness),
+        weight: p.random(LINES.weightMin, LINES.weightMax),
     };
 }
 

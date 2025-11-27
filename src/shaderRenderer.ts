@@ -1,22 +1,54 @@
 import p5 from 'p5';
 import { DistanceField, getMaxDistance } from './sdf';
 import { HSB, hsbObjToRgb } from './color';
+import { LEADING } from './config';
+import { LineConfig } from './generators';
 
 // Import shaders as raw strings (Vite handles this with ?raw)
 import vertShader from './shaders/region.vert?raw';
 import fragShader from './shaders/region.frag?raw';
-export type EdgeMode = 'darken' | 'lighten' | 'saturate';
 
-export interface ShadingConfig {
-    edgeIntensity: number;
-    edgeFalloff: number;
-    edgeMode: EdgeMode;
+// Maximum lines supported by uniform arrays (GLSL limit)
+const MAX_LINES = 40;
+
+/**
+ * Stained glass effect configuration
+ */
+export interface StainedGlassConfig {
+    centerGlow: number;
+    edgeDarken: number;
+    glowFalloff: number;
+    noiseScale: number;
+    noiseIntensity: number;
+    noiseSeed: number;
 }
 
 interface RegionData {
-    ids: Uint8Array;           // Region ID per pixel (0-254 = regions, 255 = boundary)
-    colors: HSB[];             // Color for each region
+    ids: Uint8Array;
+    colors: HSB[];
     distanceField: DistanceField;
+}
+
+/**
+ * Pack line endpoints into array of vec4 for shader uniforms.
+ * Each vec4 = [x1, y1, x2, y2] in pixel coordinates
+ * Returns flat array that p5 will interpret as vec4[]
+ */
+function packLinesForShader(lines: LineConfig[]): number[] {
+    const data: number[] = [];
+    const count = Math.min(lines.length, MAX_LINES);
+
+    for (let i = 0; i < count; i++) {
+        const line = lines[i];
+        data.push(line.start.x, line.start.y, line.end.x, line.end.y);
+    }
+
+    // Pad to MAX_LINES vec4s (4 floats each)
+    while (data.length < MAX_LINES * 4) {
+        data.push(0, 0, 0, 0);
+    }
+
+    return data;
 }
 
 /**
@@ -38,9 +70,9 @@ export class ShaderRenderer {
     }
 
     /**
-     * Render regions using GPU shader
+     * Render regions with stained glass effect and rounded leading
      */
-    render(data: RegionData, config: ShadingConfig): void {
+    render(data: RegionData, config: StainedGlassConfig, lines: LineConfig[]): void {
         if (!this.shader) {
             throw new Error('ShaderRenderer not initialized. Call init() first.');
         }
@@ -55,14 +87,31 @@ export class ShaderRenderer {
         // Apply shader
         this.p.shader(this.shader);
 
-        // Set uniforms
+        // Set texture uniforms
         this.shader.setUniform('uRegionTex', this.regionTex!);
         this.shader.setUniform('uDistanceTex', this.distanceTex!);
         this.shader.setUniform('uColorsTex', this.colorsTex!);
-        this.shader.setUniform('uEdgeIntensity', config.edgeIntensity);
-        // Normalize falloff to 0-1 range based on canvas size
-        this.shader.setUniform('uEdgeFalloff', config.edgeFalloff / Math.max(width, height));
-        this.shader.setUniform('uEdgeMode', this.edgeModeToInt(config.edgeMode));
+
+        // Resolution for pixel-space calculations
+        this.shader.setUniform('uResolution', [width, height]);
+
+        // Stained glass uniforms
+        this.shader.setUniform('uCenterGlow', config.centerGlow);
+        this.shader.setUniform('uEdgeDarken', config.edgeDarken);
+        this.shader.setUniform('uGlowFalloff', config.glowFalloff);
+
+        // Noise uniforms
+        this.shader.setUniform('uNoiseScale', config.noiseScale);
+        this.shader.setUniform('uNoiseIntensity', config.noiseIntensity);
+        this.shader.setUniform('uNoiseSeed', config.noiseSeed);
+
+        // Line/leading uniforms for analytical SDF
+        const lineData = packLinesForShader(lines);
+        this.shader.setUniform('uLines', lineData);
+        this.shader.setUniform('uLineCount', Math.min(lines.length, MAX_LINES));
+        this.shader.setUniform('uLeadingThickness', LEADING.thickness);
+        this.shader.setUniform('uRoundingRadius', LEADING.roundingRadius);
+        this.shader.setUniform('uLeadingColor', [LEADING.color.r, LEADING.color.g, LEADING.color.b]);
 
         // Draw full-screen quad to trigger fragment shader
         this.p.rect(0, 0, width, height);
@@ -86,7 +135,6 @@ export class ShaderRenderer {
         for (let i = 0; i < ids.length; i++) {
             const idx = i * 4;
             const regionId = ids[i];
-            // Store region ID in R channel (normalized to 0-255)
             pixels[idx] = regionId;
             pixels[idx + 1] = 0;
             pixels[idx + 2] = 0;
@@ -114,7 +162,6 @@ export class ShaderRenderer {
 
         for (let i = 0; i < data.length; i++) {
             const idx = i * 4;
-            // Normalize distance to 0-255 range
             const normalizedDist = maxDist > 0 ? Math.sqrt(data[i]) / maxDist : 0;
             const distByte = Math.min(255, Math.floor(normalizedDist * 255));
             pixels[idx] = distByte;
@@ -156,14 +203,6 @@ export class ShaderRenderer {
         this.colorsTex.updatePixels();
     }
 
-    private edgeModeToInt(mode: EdgeMode): number {
-        switch (mode) {
-            case 'darken': return 0;
-            case 'lighten': return 1;
-            case 'saturate': return 2;
-        }
-    }
-
     /**
      * Clean up resources
      */
@@ -173,4 +212,3 @@ export class ShaderRenderer {
         this.colorsTex?.remove();
     }
 }
-
