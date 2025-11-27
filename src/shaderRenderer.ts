@@ -2,14 +2,15 @@ import p5 from 'p5';
 import { DistanceField, getMaxDistance } from './sdf';
 import { HSB, hsbObjToRgb } from './color';
 import { LEADING } from './config';
-import { LineConfig } from './generators';
+import { LineConfig, CircleConfig } from './generators';
 
 // Import shaders as raw strings (Vite handles this with ?raw)
 import vertShader from './shaders/region.vert?raw';
 import fragShader from './shaders/region.frag?raw';
 
-// Maximum lines supported by uniform arrays (GLSL limit)
+// Maximum shapes supported by uniform arrays (GLSL limit)
 const MAX_LINES = 40;
+const MAX_CIRCLES = 10;
 
 /**
  * Stained glass effect configuration
@@ -32,7 +33,6 @@ interface RegionData {
 /**
  * Pack line endpoints into array of vec4 for shader uniforms.
  * Each vec4 = [x1, y1, x2, y2] in pixel coordinates
- * Returns flat array that p5 will interpret as vec4[]
  */
 function packLinesForShader(lines: LineConfig[]): number[] {
     const data: number[] = [];
@@ -46,6 +46,27 @@ function packLinesForShader(lines: LineConfig[]): number[] {
     // Pad to MAX_LINES vec4s (4 floats each)
     while (data.length < MAX_LINES * 4) {
         data.push(0, 0, 0, 0);
+    }
+
+    return data;
+}
+
+/**
+ * Pack circles into array of vec3 for shader uniforms.
+ * Each vec3 = [centerX, centerY, radius] in pixel coordinates
+ */
+function packCirclesForShader(circles: CircleConfig[]): number[] {
+    const data: number[] = [];
+    const count = Math.min(circles.length, MAX_CIRCLES);
+
+    for (let i = 0; i < count; i++) {
+        const circle = circles[i];
+        data.push(circle.center.x, circle.center.y, circle.radius);
+    }
+
+    // Pad to MAX_CIRCLES vec3s (3 floats each)
+    while (data.length < MAX_CIRCLES * 3) {
+        data.push(0, 0, 0);
     }
 
     return data;
@@ -72,7 +93,12 @@ export class ShaderRenderer {
     /**
      * Render regions with stained glass effect and rounded leading
      */
-    render(data: RegionData, config: StainedGlassConfig, lines: LineConfig[]): void {
+    render(
+        data: RegionData,
+        config: StainedGlassConfig,
+        lines: LineConfig[],
+        circles: CircleConfig[] = []
+    ): void {
         if (!this.shader) {
             throw new Error('ShaderRenderer not initialized. Call init() first.');
         }
@@ -105,10 +131,17 @@ export class ShaderRenderer {
         this.shader.setUniform('uNoiseIntensity', config.noiseIntensity);
         this.shader.setUniform('uNoiseSeed', config.noiseSeed);
 
-        // Line/leading uniforms for analytical SDF
+        // Line uniforms for analytical SDF
         const lineData = packLinesForShader(lines);
         this.shader.setUniform('uLines', lineData);
         this.shader.setUniform('uLineCount', Math.min(lines.length, MAX_LINES));
+
+        // Circle uniforms for analytical SDF
+        const circleData = packCirclesForShader(circles);
+        this.shader.setUniform('uCircles', circleData);
+        this.shader.setUniform('uCircleCount', Math.min(circles.length, MAX_CIRCLES));
+
+        // Leading appearance
         this.shader.setUniform('uLeadingThickness', LEADING.thickness);
         this.shader.setUniform('uRoundingRadius', LEADING.roundingRadius);
         this.shader.setUniform('uLeadingColor', [LEADING.color.r, LEADING.color.g, LEADING.color.b]);

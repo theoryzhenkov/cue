@@ -18,15 +18,32 @@ export const CANVAS = {
 
 export const LINES = {
     /** Minimum number of lines per generation */
-    min: 8,
+    min: 4,
     /** Maximum number of lines per generation */
-    max: 20,
+    max: 6,
     /** Line weight range */
     weightMin: 8,
     weightMax: 10,
 };
 
-// Note: More lines = more regions. Keep max under ~25 to stay within 254 region limit.
+//=============================================================================
+// CIRCLE GENERATION
+//=============================================================================
+
+export const CIRCLES = {
+    /** Minimum number of circles per generation */
+    min: 1,
+    /** Maximum number of circles per generation */
+    max: 2,
+    /** Circle radius range (in pixels) */
+    radiusMin: 200,
+    radiusMax: 600,
+    /** Stroke weight range */
+    weightMin: 8,
+    weightMax: 10,
+};
+
+// Note: More shapes = more regions. Keep total under ~25 to stay within 254 region limit.
 
 //=============================================================================
 // STAINED GLASS EFFECT
@@ -85,4 +102,3 @@ export const LEADING = {
     /** Base thickness of the leading in pixels */
     thickness: 4,
 };
-

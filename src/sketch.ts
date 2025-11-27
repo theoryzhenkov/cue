@@ -1,11 +1,18 @@
 import p5 from 'p5';
-import { generateLines, drawLineToBuffer, LineConfig } from './generators';
+import {
+    generateLines,
+    drawLineToBuffer,
+    LineConfig,
+    generateCircles,
+    drawCircleToBuffer,
+    CircleConfig,
+} from './generators';
 import { detectRegions } from './regionFiller';
 import { ShaderRenderer, StainedGlassConfig } from './shaderRenderer';
-import { CANVAS, LINES, STAINED_GLASS } from './config';
+import { CANVAS, LINES, CIRCLES, STAINED_GLASS } from './config';
 
 const sketch = (p: p5) => {
-    let lineBuffer: p5.Graphics;
+    let shapeBuffer: p5.Graphics;
     let shaderRenderer: ShaderRenderer;
     let isGenerating = false;
 
@@ -13,22 +20,29 @@ const sketch = (p: p5) => {
         if (isGenerating) return;
         isGenerating = true;
 
-        // Clear line buffer with white background
-        lineBuffer.background(255);
+        // Clear shape buffer with white background
+        shapeBuffer.background(255);
 
         // Generate lines
         const numLines = Math.floor(p.random(LINES.min, LINES.max));
         const lines: LineConfig[] = generateLines(p, numLines, CANVAS.width, CANVAS.height);
 
-        // Draw lines to buffer (black lines for boundary detection)
+        // Generate circles
+        const numCircles = Math.floor(p.random(CIRCLES.min, CIRCLES.max));
+        const circles: CircleConfig[] = generateCircles(p, numCircles, CANVAS.width, CANVAS.height);
+
+        // Draw all shapes to buffer (black strokes for boundary detection)
         for (const line of lines) {
-            drawLineToBuffer(lineBuffer, line);
+            drawLineToBuffer(shapeBuffer, line);
+        }
+        for (const circle of circles) {
+            drawCircleToBuffer(shapeBuffer, circle);
         }
 
-        // Detect regions from line buffer (CPU)
-        lineBuffer.loadPixels();
+        // Detect regions from shape buffer (CPU)
+        shapeBuffer.loadPixels();
         // p5's type definitions incorrectly type pixels as number[], but it's actually Uint8ClampedArray
-        const regionData = detectRegions(lineBuffer.pixels as unknown as Uint8ClampedArray, CANVAS.width, CANVAS.height);
+        const regionData = detectRegions(shapeBuffer.pixels as unknown as Uint8ClampedArray, CANVAS.width, CANVAS.height);
 
         // Build config with randomized noise seed
         const config: StainedGlassConfig = {
@@ -38,7 +52,7 @@ const sketch = (p: p5) => {
 
         // Render regions with stained glass effect and rounded leading (GPU)
         p.background(255);
-        shaderRenderer.render(regionData, config, lines);
+        shaderRenderer.render(regionData, config, lines, circles);
 
         isGenerating = false;
     }
@@ -47,9 +61,9 @@ const sketch = (p: p5) => {
         p.createCanvas(CANVAS.width, CANVAS.height, p.WEBGL);
         p.pixelDensity(1);
 
-        // Create off-screen buffer for line detection
-        lineBuffer = p.createGraphics(CANVAS.width, CANVAS.height);
-        lineBuffer.pixelDensity(1);
+        // Create off-screen buffer for shape detection
+        shapeBuffer = p.createGraphics(CANVAS.width, CANVAS.height);
+        shapeBuffer.pixelDensity(1);
 
         // Initialize shader renderer
         shaderRenderer = new ShaderRenderer(p);

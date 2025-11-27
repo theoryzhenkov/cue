@@ -1,6 +1,6 @@
 import p5 from 'p5';
 import { HSB, generateDistinctColor, hsbObjToRgb } from './color';
-import { LINES, COLORS } from './config';
+import { LINES, CIRCLES, COLORS } from './config';
 
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
@@ -15,6 +15,17 @@ export interface LineConfig {
     color: HSB;
     weight: number;
 }
+
+export interface CircleConfig {
+    center: Point;
+    radius: number;
+    color: HSB;
+    weight: number;
+}
+
+//=============================================================================
+// LINE GENERATION
+//=============================================================================
 
 /**
  * Get a random point on a specified edge
@@ -75,20 +86,59 @@ export function generateLines(p: p5, count: number, width: number, height: numbe
 }
 
 /**
- * Draw a line on the canvas or graphics buffer with its color
- */
-export function drawLine(target: p5 | p5.Graphics, line: LineConfig): void {
-    const rgb = hsbObjToRgb(line.color);
-    target.stroke(rgb.r, rgb.g, rgb.b);
-    target.strokeWeight(line.weight);
-    target.line(line.start.x, line.start.y, line.end.x, line.end.y);
-}
-
-/**
  * Draw a line to a buffer using black color (for boundary detection)
  */
 export function drawLineToBuffer(buffer: p5.Graphics, line: LineConfig): void {
     buffer.stroke(0);
     buffer.strokeWeight(line.weight);
     buffer.line(line.start.x, line.start.y, line.end.x, line.end.y);
+}
+
+//=============================================================================
+// CIRCLE GENERATION
+//=============================================================================
+
+/**
+ * Generate a random circle within the canvas bounds
+ */
+export function generateCircle(p: p5, index: number, width: number, height: number): CircleConfig {
+    const radius = p.random(CIRCLES.radiusMin, CIRCLES.radiusMax);
+
+    // Keep center within canvas with some margin
+    const margin = radius * 0.5;
+    const center: Point = {
+        x: p.random(margin, width - margin),
+        y: p.random(margin, height - margin),
+    };
+
+    const saturation = COLORS.saturationMin + p.random(COLORS.saturationMax - COLORS.saturationMin);
+    const brightness = COLORS.brightnessMin + p.random(COLORS.brightnessMax - COLORS.brightnessMin);
+
+    return {
+        center,
+        radius,
+        color: generateDistinctColor(index + 100, saturation, brightness),  // Offset index for different hues
+        weight: p.random(CIRCLES.weightMin, CIRCLES.weightMax),
+    };
+}
+
+/**
+ * Generate multiple circles
+ */
+export function generateCircles(p: p5, count: number, width: number, height: number): CircleConfig[] {
+    const circles: CircleConfig[] = [];
+    for (let i = 0; i < count; i++) {
+        circles.push(generateCircle(p, i, width, height));
+    }
+    return circles;
+}
+
+/**
+ * Draw a circle to a buffer using black color (for boundary detection)
+ */
+export function drawCircleToBuffer(buffer: p5.Graphics, circle: CircleConfig): void {
+    buffer.noFill();
+    buffer.stroke(0);
+    buffer.strokeWeight(circle.weight);
+    buffer.circle(circle.center.x, circle.center.y, circle.radius * 2);
 }

@@ -20,27 +20,40 @@ uniform float uNoiseScale;       // Scale of noise features
 uniform float uNoiseIntensity;   // How much noise affects brightness (0-1)
 uniform float uNoiseSeed;        // Seed for variation between generations
 
-// Line/leading parameters for analytical SDF
+// Shape parameters for analytical SDF
 #define MAX_LINES 40
-uniform vec4 uLines[MAX_LINES];  // Each vec4 = (x1, y1, x2, y2) in pixel coords
+#define MAX_CIRCLES 10
+
+uniform vec4 uLines[MAX_LINES];      // Each vec4 = (x1, y1, x2, y2) in pixel coords
 uniform int uLineCount;
+
+uniform vec3 uCircles[MAX_CIRCLES];  // Each vec3 = (centerX, centerY, radius)
+uniform int uCircleCount;
+
 uniform float uLeadingThickness;
 uniform float uRoundingRadius;
 uniform vec3 uLeadingColor;
 
 //=============================================================================
-// LINE SEGMENT SDF
+// SDF PRIMITIVES
 //=============================================================================
 
 /**
  * Signed distance to a line segment from point p to segment (a, b)
- * Returns the shortest distance from p to the line segment
  */
 float sdSegment(vec2 p, vec2 a, vec2 b) {
     vec2 pa = p - a;
     vec2 ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return length(pa - ba * h);
+}
+
+/**
+ * Distance to circle BOUNDARY (ring, not filled disc)
+ * Returns distance to the stroke, not the interior
+ */
+float sdCircleBoundary(vec2 p, vec2 center, float radius) {
+    return abs(length(p - center) - radius);
 }
 
 /**
@@ -54,19 +67,27 @@ float smin(float a, float b, float k) {
 }
 
 /**
- * Compute the minimum distance to all lines with smooth blending at intersections
- * Uses smooth min to create rounded corners where lines meet
+ * Compute the minimum distance to all shapes with smooth blending at intersections
+ * Uses smooth min to create rounded corners where shapes meet
  */
 float computeLeadingSDF(vec2 pixelPos) {
     float minDist = 1e10;
 
+    // Lines
     for (int i = 0; i < MAX_LINES; i++) {
         if (i >= uLineCount) break;
 
         vec4 line = uLines[i];
         float d = sdSegment(pixelPos, line.xy, line.zw);
+        minDist = smin(minDist, d, uRoundingRadius);
+    }
 
-        // Use smooth min to blend distances - creates rounded corners at intersections
+    // Circles
+    for (int i = 0; i < MAX_CIRCLES; i++) {
+        if (i >= uCircleCount) break;
+
+        vec3 circle = uCircles[i];
+        float d = sdCircleBoundary(pixelPos, circle.xy, circle.z);
         minDist = smin(minDist, d, uRoundingRadius);
     }
 
