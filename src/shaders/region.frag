@@ -34,6 +34,15 @@ uniform float uLeadingThickness;
 uniform float uRoundingRadius;
 uniform vec3 uLeadingColor;
 
+// Watercolor effect parameters
+uniform float uGrainIntensity;     // Film grain visibility
+uniform float uWobbleAmount;       // How much leading wobbles (pixels)
+uniform float uWobbleScale;        // Scale of wobble pattern
+uniform float uColorBleed;         // Hue shift within regions
+uniform float uSaturationBleed;    // Saturation variation
+uniform float uBleedScale;         // Scale of color bleeding pattern
+uniform float uEdgeIrregularity;   // Organic edge variation
+
 //=============================================================================
 // SDF PRIMITIVES
 //=============================================================================
@@ -172,7 +181,19 @@ vec3 hsb2rgb(vec3 c) {
 }
 
 //=============================================================================
-// STAINED GLASS COLOR COMPUTATION
+// FILM GRAIN
+//=============================================================================
+
+/**
+ * High-frequency pseudo-random noise for film grain effect
+ * Returns value in range [-1, 1]
+ */
+float filmGrain(vec2 coord, float seed) {
+    return fract(sin(dot(coord + seed, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
+}
+
+//=============================================================================
+// STAINED GLASS COLOR COMPUTATION (with watercolor effects)
 //=============================================================================
 
 vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord) {
@@ -185,15 +206,29 @@ vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord) {
     // Sample distance field (0 at edge, higher toward center)
     float dist = texture2D(uDistanceTex, texCoord).r;
 
+    // -------------------------------------------------------------------------
+    // WATERCOLOR COLOR BLEEDING - Large-scale hue/saturation variation
+    // -------------------------------------------------------------------------
+    vec2 bleedCoord = pixelCoord * uBleedScale + vec2(uNoiseSeed + regionId * 37.0);
+    float bleedNoise = snoise(bleedCoord);
+    float bleedNoise2 = snoise(bleedCoord * 1.7 + 50.0);
+
+    // -------------------------------------------------------------------------
     // CENTER GLOW - Light transmission effect
+    // -------------------------------------------------------------------------
     float glowFactor = smoothstep(0.0, uGlowFalloff, dist);
     float centerBrightness = glowFactor * uCenterGlow;
 
-    // EDGE DARKENING - Subtle depth at edges
-    float edgeFactor = 1.0 - smoothstep(0.0, uGlowFalloff * 0.3, dist);
+    // -------------------------------------------------------------------------
+    // EDGE DARKENING with irregularity - Organic watercolor borders
+    // -------------------------------------------------------------------------
+    float edgeNoise = snoise(pixelCoord * 0.015 + uNoiseSeed) * uEdgeIrregularity;
+    float edgeFactor = 1.0 - smoothstep(0.0, uGlowFalloff * 0.3 + edgeNoise, dist);
     float edgeDarkness = edgeFactor * uEdgeDarken;
 
-    // GLASS TEXTURE NOISE - Organic imperfections
+    // -------------------------------------------------------------------------
+    // GLASS TEXTURE NOISE - Fine organic imperfections
+    // -------------------------------------------------------------------------
     vec2 noiseCoord = pixelCoord * uNoiseScale * 0.005 + vec2(uNoiseSeed + regionId * 100.0);
 
     float noise = fbm(noiseCoord, 4) * 0.5 + 0.5;
@@ -202,8 +237,14 @@ vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord) {
     float textureNoise = mix(noise, fineNoise, 0.3);
     float noiseEffect = (textureNoise - 0.5) * uNoiseIntensity;
 
-    // COMBINE EFFECTS - Stained glass look
+    // -------------------------------------------------------------------------
+    // COMBINE EFFECTS - Watercolor stained glass look
+    // -------------------------------------------------------------------------
     vec3 hsb = rgb2hsb(baseColor);
+
+    // Apply watercolor color bleeding (large-scale hue/saturation shift)
+    hsb.x = fract(hsb.x + bleedNoise * uColorBleed);
+    hsb.y = clamp(hsb.y + bleedNoise2 * uSaturationBleed, 0.2, 1.0);
 
     // Apply center glow (brighter in center)
     hsb.z = min(1.0, hsb.z + centerBrightness * 0.4);
@@ -213,11 +254,11 @@ vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord) {
     hsb.z *= (1.0 - edgeDarkness * 0.5);
     hsb.y = min(1.0, hsb.y * (1.0 + edgeDarkness * 0.2));
 
-    // Apply noise texture
+    // Apply fine noise texture
     hsb.z = clamp(hsb.z + noiseEffect * 0.25, 0.0, 1.0);
     hsb.y = clamp(hsb.y + noiseEffect * 0.1, 0.0, 1.0);
 
-    // Very subtle hue shift from noise
+    // Additional subtle hue shift from fine noise
     hsb.x = fract(hsb.x + noiseEffect * 0.02);
 
     return hsb2rgb(hsb);
@@ -236,9 +277,16 @@ void main() {
     vec3 glassColor = computeGlassColor(pixelCoord, vTexCoord);
 
     // =========================================================================
-    // 2. COMPUTE LEADING SDF AND BLEND
+    // 2. WOBBLY LEADING - Organic hand-drawn look
     // =========================================================================
-    float leadingSDF = computeLeadingSDF(pixelCoord);
+    // Distort position before SDF calculation for wavy lines
+    vec2 wobble = vec2(
+        snoise(pixelCoord * uWobbleScale + uNoiseSeed) * uWobbleAmount,
+        snoise(pixelCoord * uWobbleScale + uNoiseSeed + 100.0) * uWobbleAmount
+    );
+    vec2 wobbledCoord = pixelCoord + wobble;
+
+    float leadingSDF = computeLeadingSDF(wobbledCoord);
 
     // Anti-aliasing width in pixels
     float aaWidth = 1.5;
@@ -251,9 +299,18 @@ void main() {
     vec3 leadingColor = uLeadingColor * innerShade;
 
     // =========================================================================
-    // 3. FINAL OUTPUT - Blend leading with glass
+    // 3. BLEND LEADING WITH GLASS
     // =========================================================================
     vec3 finalColor = mix(glassColor, leadingColor, leadingBlend);
+
+    // =========================================================================
+    // 4. FILM GRAIN - Visible texture overlay
+    // =========================================================================
+    float grain = filmGrain(pixelCoord, uNoiseSeed);
+    finalColor += grain * uGrainIntensity;
+
+    // Clamp to valid range
+    finalColor = clamp(finalColor, 0.0, 1.0);
 
     gl_FragColor = vec4(finalColor, 1.0);
 }

@@ -1,7 +1,7 @@
 import p5 from 'p5';
 import { DistanceField, getMaxDistance } from './sdf';
 import { HSB, hsbObjToRgb } from './color';
-import { LEADING } from './config';
+import { LEADING, WATERCOLOR } from './config';
 import { LineConfig, CircleConfig } from './generators';
 
 // Import shaders as raw strings (Vite handles this with ?raw)
@@ -145,6 +145,15 @@ export class ShaderRenderer {
         this.shader.setUniform('uLeadingThickness', LEADING.thickness);
         this.shader.setUniform('uRoundingRadius', LEADING.roundingRadius);
         this.shader.setUniform('uLeadingColor', [LEADING.color.r, LEADING.color.g, LEADING.color.b]);
+
+        // Watercolor effect uniforms
+        this.shader.setUniform('uGrainIntensity', WATERCOLOR.grainIntensity);
+        this.shader.setUniform('uWobbleAmount', WATERCOLOR.wobbleAmount);
+        this.shader.setUniform('uWobbleScale', WATERCOLOR.wobbleScale);
+        this.shader.setUniform('uColorBleed', WATERCOLOR.colorBleed);
+        this.shader.setUniform('uSaturationBleed', WATERCOLOR.saturationBleed);
+        this.shader.setUniform('uBleedScale', WATERCOLOR.bleedScale);
+        this.shader.setUniform('uEdgeIrregularity', WATERCOLOR.edgeIrregularity);
 
         // Draw full-screen quad to trigger fragment shader
         this.p.rect(0, 0, width, height);

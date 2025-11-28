@@ -55,13 +55,13 @@ export const STAINED_GLASS = {
     //-------------------------------------------------------------------------
 
     /** How much brighter the center of each pane is (0-1) */
-    centerGlow: 0.7,
+    centerGlow: 0.3,
 
     /** Subtle darkening at edges near the leading (0-1) */
-    edgeDarken: 0.5,
+    edgeDarken: 0.1,
 
     /** How far the glow extends from center (0-1, higher = larger glow area) */
-    glowFalloff: 0.4,
+    glowFalloff: 0.1,
 
     //-------------------------------------------------------------------------
     // Glass Texture (Noise)
@@ -101,4 +101,47 @@ export const LEADING = {
 
     /** Base thickness of the leading in pixels */
     thickness: 4,
+};
+
+//=============================================================================
+// WATERCOLOR TEXTURE
+//=============================================================================
+
+export const WATERCOLOR = {
+    //-------------------------------------------------------------------------
+    // Film Grain
+    //-------------------------------------------------------------------------
+
+    /** Intensity of visible grain texture (0-0.1 typical) */
+    grainIntensity: 0.02,
+
+    //-------------------------------------------------------------------------
+    // Wavy Leading (organic hand-drawn look)
+    //-------------------------------------------------------------------------
+
+    /** How much the leading lines wobble in pixels */
+    wobbleAmount: 4,
+
+    /** Scale of the wobble pattern (lower = larger waves) */
+    wobbleScale: 0.003,
+
+    //-------------------------------------------------------------------------
+    // Color Bleeding (watercolor effect)
+    //-------------------------------------------------------------------------
+
+    /** How much hue shifts within regions (0-0.3 typical) */
+    colorBleed: 0.1,
+
+    /** How much saturation varies within regions */
+    saturationBleed: 0.1,
+
+    /** Scale of the color bleeding pattern */
+    bleedScale: 0.0005,
+
+    //-------------------------------------------------------------------------
+    // Edge Irregularity
+    //-------------------------------------------------------------------------
+
+    /** How much the edge darkening varies (organic borders) */
+    edgeIrregularity: 0.00,
 };
