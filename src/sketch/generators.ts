@@ -85,14 +85,17 @@ export function generateEdgeToEdgeLine(
         endEdge = getRandomEdge(p);
     }
 
-    const saturation = colors.saturationMin + p.random(colors.saturationMax - colors.saturationMin);
-    const brightness = colors.brightnessMin + p.random(colors.brightnessMax - colors.brightnessMin);
+    // Use the resolved saturation/brightness values with small random variation
+    const satVariance = 0.1;
+    const briVariance = 0.1;
+    const saturation = colors.saturation + p.random(-satVariance, satVariance);
+    const brightness = colors.brightness + p.random(-briVariance, briVariance);
 
     return {
         start: getPointOnEdge(p, startEdge, width, height),
         end: getPointOnEdge(p, endEdge, width, height),
         color: generateDistinctColor(index, saturation, brightness),
-        weight: p.random(config.weightMin, config.weightMax),
+        weight: config.weight,
     };
 }
 
@@ -137,7 +140,6 @@ export function generateCircle(
     sizeScale: number = 1.0
 ): CircleConfig {
     // Scale radius based on resolution so circles cover proportional area
-    // Use defaults if radiusMin/Max are missing
     const rMin = config.radiusMin ?? 200;
     const rMax = config.radiusMax ?? 600;
     
@@ -152,14 +154,17 @@ export function generateCircle(
         y: p.random(margin, height - margin),
     };
 
-    const saturation = colors.saturationMin + p.random(colors.saturationMax - colors.saturationMin);
-    const brightness = colors.brightnessMin + p.random(colors.brightnessMax - colors.brightnessMin);
+    // Use the resolved saturation/brightness values with small random variation
+    const satVariance = 0.1;
+    const briVariance = 0.1;
+    const saturation = colors.saturation + p.random(-satVariance, satVariance);
+    const brightness = colors.brightness + p.random(-briVariance, briVariance);
 
     return {
         center,
         radius,
         color: generateDistinctColor(index + 100, saturation, brightness),  // Offset index for different hues
-        weight: p.random(config.weightMin, config.weightMax),
+        weight: config.weight,
     };
 }
 

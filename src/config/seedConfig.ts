@@ -1,141 +1,206 @@
 /**
- * Seed Configuration - Maps prompt dimensions to generation parameters
+ * Config Resolver - Resolves ConfigTemplate to AppConfig
  * 
- * This module translates the three analyzed dimensions (valence, arousal, focus)
- * into a complete AppConfig.
+ * Uses beta distribution sampling and sentiment dimensions to generate final values.
  */
 
 import { PromptDimensions } from '../llms/promptAnalyzer';
-import { AppConfig, ColorConfig, ShapeConfig, StainedGlassEffect, WatercolorEffect } from './types';
-import { CONFIG } from './config';
+import { 
+    ConfigTemplate, 
+    AppConfig, 
+    SeededValue, 
+    ConfigValue, 
+    isSeededValue,
+    SeedDimension
+} from './types';
+import { CONFIG_TEMPLATE } from './config';
 
 /**
- * Map valence to color palette
- * Low valence = cool, desaturated, darker
- * High valence = warm, saturated, brighter
+ * Sample from a Beta distribution using the Joehnk algorithm.
+ * Returns a value in [0, 1].
  */
-function mapValenceToColors(valence: number): Partial<ColorConfig> {
-    // Hue: low valence → blues/purples (0.55-0.75), high valence → oranges/yellows (0.05-0.15)
-    const hueBase = lerp(0.6, 0.08, valence);
-    const hueRange = lerp(0.15, 0.25, valence); // More variety when positive
+function sampleBeta(alpha: number, beta: number): number {
+    // For alpha, beta >= 1, use rejection sampling
+    // For simplicity, use the inverse transform via gamma functions approximation
     
-    // Saturation: increases with valence
-    const saturationMin = lerp(0.35, 0.6, valence);
-    const saturationMax = lerp(0.55, 0.85, valence);
+    // Joehnk's algorithm for alpha, beta < 1 or simple cases
+    if (alpha === 1 && beta === 1) {
+        return Math.random(); // Uniform
+    }
     
-    // Brightness: increases with valence
-    const brightnessMin = lerp(0.5, 0.7, valence);
-    const brightnessMax = lerp(0.7, 0.95, valence);
-    
-    return {
-        hueBase,
-        hueRange,
-        saturationMin,
-        saturationMax,
-        brightnessMin,
-        brightnessMax
-    };
+    // Use the ratio of gamma variates method
+    const gammaA = sampleGamma(alpha);
+    const gammaB = sampleGamma(beta);
+    return gammaA / (gammaA + gammaB);
 }
 
 /**
- * Map arousal to shape counts
- * Low arousal = fewer, simpler shapes
- * High arousal = more, complex composition
+ * Sample from Gamma distribution using Marsaglia and Tsang's method
  */
-function mapArousalToShapes(arousal: number): { lines: Partial<ShapeConfig>, circles: Partial<ShapeConfig> } {
-    // Lines: 2-3 at low arousal, 5-8 at high arousal
-    const linesMin = Math.round(lerp(2, 5, arousal));
-    const linesMax = Math.round(lerp(3, 8, arousal));
+function sampleGamma(shape: number): number {
+    if (shape < 1) {
+        // Boost for shape < 1
+        return sampleGamma(shape + 1) * Math.pow(Math.random(), 1 / shape);
+    }
     
-    // Circles: 0-1 at low arousal, 2-4 at high arousal
-    const circlesMin = Math.round(lerp(0, 2, arousal));
-    const circlesMax = Math.round(lerp(1, 4, arousal));
+    const d = shape - 1/3;
+    const c = 1 / Math.sqrt(9 * d);
     
-    return {
-        lines: {
-            min: linesMin,
-            max: linesMax
-        },
-        circles: {
-            min: circlesMin,
-            max: circlesMax
+    while (true) {
+        let x: number;
+        let v: number;
+        
+        do {
+            x = randomNormal();
+            v = 1 + c * x;
+        } while (v <= 0);
+        
+        v = v * v * v;
+        const u = Math.random();
+        
+        if (u < 1 - 0.0331 * (x * x) * (x * x)) {
+            return d * v;
         }
-    };
+        
+        if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
+            return d * v;
+        }
+    }
 }
 
 /**
- * Map focus to effect parameters
- * Low focus = more blur, wobble, diffuse effects
- * High focus = sharp, precise, minimal distortion
+ * Sample from standard normal distribution using Box-Muller
  */
-function mapFocusToEffects(focus: number): { stainedGlass: Partial<StainedGlassEffect>, watercolor: Partial<WatercolorEffect> } {
-    // Wobble: high at low focus, low at high focus
-    const wobbleAmount = lerp(8, 1, focus);
-    const wobbleScale = lerp(0.004, 0.002, focus);
-    
-    // Color bleeding: high at low focus
-    const colorBleed = lerp(0.2, 0.03, focus);
-    const saturationBleed = lerp(0.2, 0.05, focus);
-    
-    // Noise: higher at low focus (more texture)
-    const noiseIntensity = lerp(0.25, 0.08, focus);
-    
-    // Grain: higher at low focus
-    const grainIntensity = lerp(0.04, 0.01, focus);
-    
-    // Edge effects: softer at low focus
-    const edgeDarken = lerp(0.15, 0.05, focus);
-    const centerGlow = lerp(0.4, 0.2, focus);
-    
-    return {
-        stainedGlass: {
-            noiseIntensity,
-            edgeDarken,
-            centerGlow
-        },
-        watercolor: {
-            wobbleAmount,
-            wobbleScale,
-            colorBleed,
-            saturationBleed,
-            grainIntensity
-        }
-    };
+function randomNormal(): number {
+    const u1 = Math.random();
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
 /**
- * Generate a complete seeded configuration from prompt dimensions
+ * Linear interpolation
  */
-export function generateSeededConfig(dimensions: PromptDimensions): AppConfig {
-    const colors = mapValenceToColors(dimensions.valence);
-    const shapes = mapArousalToShapes(dimensions.arousal);
-    const effects = mapFocusToEffects(dimensions.focus);
-
-    return {
-        ...CONFIG,
-        colors: {
-            ...CONFIG.colors,
-            ...colors
-        },
-        lines: {
-            ...CONFIG.lines,
-            ...shapes.lines
-        },
-        circles: {
-            ...CONFIG.circles,
-            ...shapes.circles
-        },
-        stainedGlass: {
-            ...CONFIG.stainedGlass,
-            ...effects.stainedGlass
-        },
-        watercolor: {
-            ...CONFIG.watercolor,
-            ...effects.watercolor
-        }
-    };
-}
-
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+/**
+ * Resolve a single SeededValue to a number.
+ * 
+ * The process:
+ * 1. Sample from Beta distribution → t in [0, 1]
+ * 2. If seeded, shift t based on dimension value (0.5 = no shift, preserves beta distribution)
+ * 3. Map final t to range
+ */
+function resolveValue(value: SeededValue, dimensions: PromptDimensions): number {
+    const [alpha, beta] = value.beta ?? [1.5, 1.5];
+    const [low, high] = value.range;
+    
+    // Sample from beta distribution
+    let t = sampleBeta(alpha, beta);
+    
+    // If seeded, shift t based on dimension value
+    // sentiment = 0.5 → no shift (pure beta distribution)
+    // sentiment = 1.0 → shift up by influence
+    // sentiment = 0.0 → shift down by influence
+    if (value.seed) {
+        const dimensionValue = dimensions[value.seed.dimension];
+        const influence = value.seed.influence;
+        
+        // Offset model: sentiment shifts the beta sample, 0.5 is neutral
+        t = t + (dimensionValue - 0.5) * influence * 2;
+        t = Math.max(0, Math.min(1, t)); // clamp to [0, 1]
+    }
+    
+    // Map to range
+    return lerp(low, high, t);
+}
+
+/**
+ * Resolve a ConfigValue (number or SeededValue) to a number
+ */
+function resolveConfigValue(value: ConfigValue, dimensions: PromptDimensions): number {
+    if (isSeededValue(value)) {
+        return resolveValue(value, dimensions);
+    }
+    return value;
+}
+
+/**
+ * Generate a resolved AppConfig from the template and dimensions
+ */
+export function resolveConfig(
+    template: ConfigTemplate = CONFIG_TEMPLATE,
+    dimensions: PromptDimensions
+): AppConfig {
+    return {
+        lines: {
+            count: Math.round(resolveValue(template.lines.count, dimensions)),
+            weight: resolveValue(template.lines.weight, dimensions),
+            radiusMin: template.lines.radiusMin !== undefined 
+                ? resolveConfigValue(template.lines.radiusMin, dimensions) 
+                : undefined,
+            radiusMax: template.lines.radiusMax !== undefined 
+                ? resolveConfigValue(template.lines.radiusMax, dimensions) 
+                : undefined
+        },
+        circles: {
+            count: Math.round(resolveValue(template.circles.count, dimensions)),
+            weight: resolveValue(template.circles.weight, dimensions),
+            radiusMin: template.circles.radiusMin !== undefined 
+                ? resolveConfigValue(template.circles.radiusMin, dimensions) 
+                : undefined,
+            radiusMax: template.circles.radiusMax !== undefined 
+                ? resolveConfigValue(template.circles.radiusMax, dimensions) 
+                : undefined
+        },
+        colors: {
+            hueBase: resolveValue(template.colors.hueBase, dimensions),
+            hueRange: resolveValue(template.colors.hueRange, dimensions),
+            saturation: resolveValue(template.colors.saturation, dimensions),
+            brightness: resolveValue(template.colors.brightness, dimensions)
+        },
+        stainedGlass: {
+            centerGlow: resolveValue(template.stainedGlass.centerGlow, dimensions),
+            edgeDarken: resolveValue(template.stainedGlass.edgeDarken, dimensions),
+            glowFalloff: resolveConfigValue(template.stainedGlass.glowFalloff, dimensions),
+            noiseScale: resolveConfigValue(template.stainedGlass.noiseScale, dimensions),
+            noiseIntensity: resolveValue(template.stainedGlass.noiseIntensity, dimensions)
+        },
+        watercolor: {
+            grainIntensity: resolveValue(template.watercolor.grainIntensity, dimensions),
+            wobbleAmount: resolveValue(template.watercolor.wobbleAmount, dimensions),
+            wobbleScale: resolveValue(template.watercolor.wobbleScale, dimensions),
+            colorBleed: resolveValue(template.watercolor.colorBleed, dimensions),
+            saturationBleed: resolveValue(template.watercolor.saturationBleed, dimensions),
+            bleedScale: resolveConfigValue(template.watercolor.bleedScale, dimensions),
+            edgeIrregularity: resolveConfigValue(template.watercolor.edgeIrregularity, dimensions)
+        },
+        leading: {
+            color: template.leading.color,
+            roundingRadius: resolveConfigValue(template.leading.roundingRadius, dimensions),
+            thickness: resolveConfigValue(template.leading.thickness, dimensions)
+        },
+        referenceResolution: template.referenceResolution
+    };
+}
+
+/**
+ * Generate a config using default template and provided dimensions.
+ * This is the main entry point for seeded config generation.
+ */
+export function generateSeededConfig(dimensions: PromptDimensions): AppConfig {
+    return resolveConfig(CONFIG_TEMPLATE, dimensions);
+}
+
+/**
+ * Generate a config with neutral dimensions (0.5 for all).
+ * Useful for non-seeded generation.
+ */
+export function generateDefaultConfig(): AppConfig {
+    return resolveConfig(CONFIG_TEMPLATE, {
+        valence: 0.5,
+        arousal: 0.5,
+        focus: 0.5
+    });
 }

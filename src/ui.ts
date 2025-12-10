@@ -6,7 +6,7 @@ import { RESOLUTION_PRESETS, Resolution } from './config/constants';
 import { analyzePrompt, PromptDimensions, getDefaultDimensions } from './llms/promptAnalyzer';
 import { generateSeededConfig } from './config/seedConfig';
 import { AppConfig } from './config/types';
-import './ui.css';
+import './theme/ui.css';
 
 const API_KEY_STORAGE_KEY = 'cue-anthropic-api-key';
 

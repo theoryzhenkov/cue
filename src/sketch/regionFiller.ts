@@ -70,16 +70,23 @@ export function detectRegions(
                 break outer;
             }
 
-            // Assign color for this region using seeded parameters
-            const saturation = config.saturationMin + Math.random() * (config.saturationMax - config.saturationMin);
-            const brightness = config.brightnessMin + Math.random() * (config.brightnessMax - config.brightnessMin);
+            // Assign color for this region using resolved color parameters
+            // Add small random variation per region
+            const satVariance = 0.15;
+            const briVariance = 0.15;
+            const saturation = config.saturation + (Math.random() - 0.5) * 2 * satVariance;
+            const brightness = config.brightness + (Math.random() - 0.5) * 2 * briVariance;
             
             // Use seeded hue base with golden ratio distribution within the hue range
             const goldenRatio = 0.618033988749895;
             const hueOffset = (regionId * goldenRatio) % 1;
             const hue = (config.hueBase + (hueOffset - 0.5) * config.hueRange + 1) % 1;
             
-            colors.push({ h: hue, s: saturation, b: brightness });
+            colors.push({ 
+                h: hue, 
+                s: Math.max(0, Math.min(1, saturation)), 
+                b: Math.max(0, Math.min(1, brightness)) 
+            });
 
             // Flood fill this region with the current ID
             fillRegion(ids, visited, width, height, x, y, regionId);

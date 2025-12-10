@@ -1,73 +1,78 @@
 /**
- * Universal Configuration Types
+ * Configuration Types
  * 
- * Defines the complete state required to generate an artwork.
- * This structure is used for both default configuration and seeded/LLM-generated configuration.
+ * Two layers:
+ * 1. Template types (ConfigTemplate, SeededValue) - define how values are generated
+ * 2. Resolved types (AppConfig) - final values used by rendering code
  */
 
-export interface ShapeConfig {
-    /** Minimum number of shapes per generation */
-    min: number;
-    /** Maximum number of shapes per generation */
-    max: number;
-    /** Stroke weight range */
-    weightMin: number;
-    weightMax: number;
-    /** Radius range (for circles only) */
-    radiusMin?: number;
-    radiusMax?: number;
+export type SeedDimension = 'valence' | 'arousal' | 'focus';
+
+/**
+ * A value that can be randomized and/or influenced by sentiment dimensions.
+ * - range: [min, max] bounds for the final value
+ * - beta: [alpha, beta] params for distribution shape (default [1.5, 1.5])
+ * - seed: which dimension influences this and how much
+ */
+export interface SeededValue {
+    range: [number, number];
+    beta?: [number, number];
+    seed?: {
+        dimension: SeedDimension;
+        influence: number;  // 0-1, how much dimension shifts vs pure randomness
+    };
 }
 
-export interface ColorConfig {
-    /** Base hue (0-1), 0.5 is neutral */
-    hueBase: number;
-    /** Hue variation range (0-1), 1.0 is full rainbow */
-    hueRange: number;
-    /** Saturation range */
-    saturationMin: number;
-    saturationMax: number;
-    /** Brightness range */
-    brightnessMin: number;
-    brightnessMax: number;
+/**
+ * A config property can be:
+ * - A fixed number (constant, no randomness)
+ * - A SeededValue (randomized and/or seeded)
+ */
+export type ConfigValue = number | SeededValue;
+
+/**
+ * Helper to check if a value is SeededValue
+ */
+export function isSeededValue(value: ConfigValue): value is SeededValue {
+    return typeof value === 'object' && 'range' in value;
 }
 
-export interface StainedGlassEffect {
-    /** How much brighter the center of each pane is (0-1) */
-    centerGlow: number;
-    /** Subtle darkening at edges near the leading (0-1) */
-    edgeDarken: number;
-    /** Distance for glow falloff in pixels */
-    glowFalloff: number;
-    /** Scale of noise features */
-    noiseScale: number;
-    /** How much noise affects the surface appearance (0-1) */
-    noiseIntensity: number;
+export interface ShapeConfigTemplate {
+    count: SeededValue;
+    weight: SeededValue;
+    radiusMin?: ConfigValue;
+    radiusMax?: ConfigValue;
 }
 
-export interface WatercolorEffect {
-    /** Intensity of visible grain texture */
-    grainIntensity: number;
-    /** How much the leading lines wobble in pixels */
-    wobbleAmount: number;
-    /** Scale of the wobble pattern */
-    wobbleScale: number;
-    /** How much hue shifts within regions */
-    colorBleed: number;
-    /** How much saturation varies within regions */
-    saturationBleed: number;
-    /** Scale of the color bleeding pattern */
-    bleedScale: number;
-    /** How much the edge darkening varies */
-    edgeIrregularity: number;
+export interface ColorConfigTemplate {
+    hueBase: SeededValue;
+    hueRange: SeededValue;
+    saturation: SeededValue;
+    brightness: SeededValue;
 }
 
-export interface LeadingConfig {
-    /** Color of the boundary lines in the shader (RGB 0-1) */
+export interface StainedGlassTemplate {
+    centerGlow: SeededValue;
+    edgeDarken: SeededValue;
+    glowFalloff: ConfigValue;
+    noiseScale: ConfigValue;
+    noiseIntensity: SeededValue;
+}
+
+export interface WatercolorTemplate {
+    grainIntensity: SeededValue;
+    wobbleAmount: SeededValue;
+    wobbleScale: SeededValue;
+    colorBleed: SeededValue;
+    saturationBleed: SeededValue;
+    bleedScale: ConfigValue;
+    edgeIrregularity: ConfigValue;
+}
+
+export interface LeadingConfigTemplate {
     color: { r: number; g: number; b: number };
-    /** Corner rounding radius in pixels */
-    roundingRadius: number;
-    /** Base thickness of the leading in pixels */
-    thickness: number;
+    roundingRadius: ConfigValue;
+    thickness: ConfigValue;
 }
 
 export interface ReferenceResolution {
@@ -76,8 +81,62 @@ export interface ReferenceResolution {
 }
 
 /**
- * The Master Config Object
- * Contains all parameters needed to render an image.
+ * The Config Template - defines how values are generated
+ */
+export interface ConfigTemplate {
+    lines: ShapeConfigTemplate;
+    circles: ShapeConfigTemplate;
+    colors: ColorConfigTemplate;
+    stainedGlass: StainedGlassTemplate;
+    watercolor: WatercolorTemplate;
+    leading: LeadingConfigTemplate;
+    referenceResolution: ReferenceResolution;
+}
+
+/**
+ * Resolved config types - used by rendering code
+ * These contain plain numbers after resolution
+ */
+export interface ShapeConfig {
+    count: number;
+    weight: number;
+    radiusMin?: number;
+    radiusMax?: number;
+}
+
+export interface ColorConfig {
+    hueBase: number;
+    hueRange: number;
+    saturation: number;
+    brightness: number;
+}
+
+export interface StainedGlassEffect {
+    centerGlow: number;
+    edgeDarken: number;
+    glowFalloff: number;
+    noiseScale: number;
+    noiseIntensity: number;
+}
+
+export interface WatercolorEffect {
+    grainIntensity: number;
+    wobbleAmount: number;
+    wobbleScale: number;
+    colorBleed: number;
+    saturationBleed: number;
+    bleedScale: number;
+    edgeIrregularity: number;
+}
+
+export interface LeadingConfig {
+    color: { r: number; g: number; b: number };
+    roundingRadius: number;
+    thickness: number;
+}
+
+/**
+ * The Resolved Config - contains all final values for rendering
  */
 export interface AppConfig {
     lines: ShapeConfig;

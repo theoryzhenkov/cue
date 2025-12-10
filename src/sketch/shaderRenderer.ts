@@ -6,9 +6,9 @@ import { LineConfig, CircleConfig } from './generators';
 
 // Import shaders as raw strings
 // @ts-ignore
-import vertShader from './shaders/region.vert' with { type: 'text' };
+import vertShader from '../shaders/region.vert' with { type: 'text' };
 // @ts-ignore
-import fragShader from './shaders/region.frag' with { type: 'text' };
+import fragShader from '../shaders/region.frag' with { type: 'text' };
 
 /**
  * Tile rendering configuration for high-res export
