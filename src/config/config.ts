@@ -106,18 +106,6 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
             beta: [2, 2],
             seed: { dimension: 'focus', influence: 0.4 }
         },
-        wobbleAmount: {
-            type: ConfigValueType.SEEDED,
-            range: [1, 3],
-            beta: [2, 2],
-            seed: { dimension: 'focus', influence: 0.6 }
-        },
-        wobbleScale: {
-            type: ConfigValueType.SEEDED,
-            range: [0.001, 0.005],
-            beta: [1.5, 1.5],
-            seed: { dimension: 'focus', influence: 0.3 }
-        },
         colorBleed: {
             type: ConfigValueType.SEEDED,
             range: [0.02, 0.25],
@@ -130,7 +118,6 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
             beta: [2, 2],
             seed: { dimension: 'focus', influence: 0.4 }
         },
-        bleedScale: 0.0005,
-        edgeIrregularity: 0.0
+        bleedScale: 0.0005
     }
 };

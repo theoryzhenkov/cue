@@ -274,12 +274,14 @@ const sketch = (p: p5) => {
         await new Promise(resolve => setTimeout(resolve, 10));
         
         const finalCanvas = compositeTiles(renderedTiles, targetWidth, targetHeight);
-        downloadCanvas(finalCanvas, `cue-${targetWidth}x${targetHeight}.png`);
+        const randomId = Math.random().toString(36).substring(2, 8);
+        downloadCanvas(finalCanvas, `cue-${targetWidth}x${targetHeight}-${randomId}.png`);
         
         ui.hideProgress();
     }
 
     p.setup = () => {
+        p.setAttributes('version', true);  // Use WebGL 2 for built-in derivatives (fwidth)
         p.createCanvas(400, 300, p.WEBGL);
         p.pixelDensity(1);
 

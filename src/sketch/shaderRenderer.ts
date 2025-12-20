@@ -185,14 +185,11 @@ export class ShaderRenderer {
         this.shader.setUniform('uRoundingRadius', config.leading.roundingRadius * previewScale);
         this.shader.setUniform('uLeadingColor', [config.leading.color.r, config.leading.color.g, config.leading.color.b]);
 
-        // Watercolor effect uniforms (scaled for preview, use seeded values when provided)
+        // Watercolor effect uniforms (scaled for preview)
         this.shader.setUniform('uGrainIntensity', config.watercolor.grainIntensity);
-        this.shader.setUniform('uWobbleAmount', config.watercolor.wobbleAmount * previewScale);
-        this.shader.setUniform('uWobbleScale', config.watercolor.wobbleScale / previewScale);
         this.shader.setUniform('uColorBleed', config.watercolor.colorBleed);
         this.shader.setUniform('uSaturationBleed', config.watercolor.saturationBleed);
         this.shader.setUniform('uBleedScale', config.watercolor.bleedScale / previewScale);
-        this.shader.setUniform('uEdgeIrregularity', config.watercolor.edgeIrregularity);
 
         // Draw full-screen quad to trigger fragment shader
         this.renderer.rect(0, 0, width, height);
@@ -209,6 +206,7 @@ export class ShaderRenderer {
             this.regionTex?.remove();
             this.regionTex = this.p5Instance.createGraphics(width, height);
             this.regionTex.pixelDensity(1);
+            this.regionTex.noSmooth();
         }
 
         this.regionTex.loadPixels();

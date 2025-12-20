@@ -94,12 +94,9 @@ export interface StainedGlassTemplate {
 
 export interface WatercolorTemplate {
     grainIntensity: SeededValue;
-    wobbleAmount: SeededValue;
-    wobbleScale: SeededValue;
     colorBleed: SeededValue;
     saturationBleed: SeededValue;
     bleedScale: number;
-    edgeIrregularity: number;
 }
 
 export interface LeadingConfigTemplate {

@@ -1,8 +1,9 @@
+#version 300 es
 // Standard vertex shader for full-screen quad
-attribute vec3 aPosition;
-attribute vec2 aTexCoord;
+in vec3 aPosition;
+in vec2 aTexCoord;
 
-varying vec2 vTexCoord;
+out vec2 vTexCoord;
 
 void main() {
     // Flip Y coordinate for proper texture sampling
@@ -13,4 +14,3 @@ void main() {
     
     gl_Position = positionVec4;
 }
-

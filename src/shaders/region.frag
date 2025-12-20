@@ -1,6 +1,8 @@
+#version 300 es
 precision highp float;
 
-varying vec2 vTexCoord;
+in vec2 vTexCoord;
+out vec4 fragColor;
 
 // Textures
 uniform sampler2D uRegionTex;    // R channel = region ID (0-255)
@@ -37,12 +39,9 @@ uniform vec3 uLeadingColor;
 
 // Watercolor effect parameters
 uniform float uGrainIntensity;     // Film grain visibility
-uniform float uWobbleAmount;       // How much leading wobbles (pixels)
-uniform float uWobbleScale;        // Scale of wobble pattern
 uniform float uColorBleed;         // Hue shift within regions
 uniform float uSaturationBleed;    // Saturation variation
 uniform float uBleedScale;         // Scale of color bleeding pattern
-uniform float uEdgeIrregularity;   // Organic edge variation
 
 /**
  * Signed distance to a line segment from point p to segment (a, b)
@@ -181,17 +180,20 @@ float filmGrain(vec2 coord, float seed) {
  * Compute glass color using analytical SDF for distance-based effects.
  * This eliminates tiling artifacts by computing distance directly from shapes
  * rather than sampling from a per-tile texture.
- * 
+ *
  * @param pixelCoord - Global pixel coordinate
- * @param texCoord - Texture coordinate for region lookup
  * @param sdfDistance - Analytical SDF distance from leading (in pixels)
  */
-vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord, float sdfDistance) {
+vec3 computeGlassColor(vec2 pixelCoord, float sdfDistance) {
+    // Calculate texture coordinate from pixel position
+    vec2 localCoord = pixelCoord - uTileOffset;
+    vec2 texCoord = localCoord / uResolution;
+
     // Sample region ID
-    float regionId = texture2D(uRegionTex, texCoord).r;
+    float regionId = texture(uRegionTex, texCoord).r;
 
     // Get base color from palette
-    vec3 baseColor = texture2D(uColorsTex, vec2(regionId, 0.5)).rgb;
+    vec3 baseColor = texture(uColorsTex, vec2(regionId, 0.5)).rgb;
 
     // Use analytical SDF distance for effects
     // sdfDistance is in pixels, higher = further from leading
@@ -205,8 +207,7 @@ vec3 computeGlassColor(vec2 pixelCoord, vec2 texCoord, float sdfDistance) {
     float glowFactor = smoothstep(0.0, uGlowFalloff, dist);
     float centerBrightness = glowFactor * uCenterGlow;
 
-    float edgeNoise = snoise(pixelCoord * 0.015 + uNoiseSeed) * uEdgeIrregularity;
-    float edgeFactor = 1.0 - smoothstep(0.0, uGlowFalloff * 0.3 + edgeNoise, dist);
+    float edgeFactor = 1.0 - smoothstep(0.0, uGlowFalloff * 0.3, dist);
     float edgeDarkness = edgeFactor * uEdgeDarken;
 
     vec2 noiseCoord = pixelCoord * uNoiseScale * 0.005 + vec2(uNoiseSeed + regionId * 100.0);
@@ -247,22 +248,14 @@ void main() {
     // Global pixel coordinate in full image (for consistent noise/patterns across tiles)
     vec2 pixelCoord = localPixelCoord + uTileOffset;
 
-    // Distort position before SDF calculation for wavy lines
-    vec2 wobble = vec2(
-        snoise(pixelCoord * uWobbleScale + uNoiseSeed) * uWobbleAmount,
-        snoise(pixelCoord * uWobbleScale + uNoiseSeed + 100.0) * uWobbleAmount
-    );
-    vec2 wobbledCoord = pixelCoord + wobble;
+    // Compute SDF for leading lines
+    float sdf = computeLeadingSDF(pixelCoord);
 
-    // Compute SDF once - reused for leading and glass effects
-    float sdf = computeLeadingSDF(wobbledCoord);
+    vec3 glassColor = computeGlassColor(pixelCoord, sdf);
 
-    vec3 glassColor = computeGlassColor(pixelCoord, vTexCoord, sdf);
-
-    // Anti-aliasing width in pixels
-    // Since SDF is in pixel units, the rate of change is ~1.0 pixel per screen pixel
-    float aa = 1.0;
-
+    // Anti-aliasing width
+    float aa = 1.5;
+    
     // Compute blend factor: 1.0 = fully leading, 0.0 = fully glass
     // Center the AA zone around the edge for proper antialiasing
     float leadingBlend = 1.0 - smoothstep(uLeadingThickness - aa, uLeadingThickness + aa, sdf);
@@ -278,5 +271,5 @@ void main() {
 
     finalColor = clamp(finalColor, 0.0, 1.0);
 
-    gl_FragColor = vec4(finalColor, 1.0);
+    fragColor = vec4(finalColor, 1.0);
 }
