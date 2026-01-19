@@ -36,19 +36,34 @@ class BrowserPool {
     }
 
     private async doInit(): Promise<void> {
+        // Use system Chromium if PUPPETEER_EXECUTABLE_PATH is set (e.g., in Docker)
+        const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        const isDocker = !!executablePath;
+        
+        // Base args for all environments
+        const baseArgs = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+        ];
+        
+        // SwiftShader args for Docker (no GPU available)
+        const swiftShaderArgs = [
+            '--enable-unsafe-swiftshader',
+            '--use-gl=angle',
+            '--use-angle=swiftshader',
+            '--disable-gpu-compositing',
+        ];
+        
         this.browser = await puppeteer.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                // SwiftShader is used automatically when no GPU is available
-                // These flags help with headless WebGL rendering
-                '--use-gl=swiftshader',
-                '--enable-webgl',
-                '--ignore-gpu-blocklist',
-            ],
+            headless: 'new',
+            executablePath,
+            args: isDocker ? [...baseArgs, ...swiftShaderArgs] : baseArgs,
         });
 
         // Pre-warm one page
