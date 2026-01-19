@@ -11,7 +11,7 @@ import { detectRegions, RegionData } from './sketch/regionFiller';
 import { ShaderRenderer, TileConfig } from './sketch/shaderRenderer';
 import { MAX_TILE_SIZE, PREVIEW_MAX_RESOLUTION } from './config/constants';
 import { resolveConfig, densityToCount } from './config/seedConfig';
-import { AppConfig, PromptDimensions } from './config/types';
+import { AppConfig, PromptDimensions, DEFAULT_DIMENSIONS } from './config/types';
 import { CONFIG_TEMPLATE } from './config/config';
 import { UI } from './ui';
 import {
@@ -23,6 +23,20 @@ import {
     TileInfo,
 } from './sketch/tiledRenderer';
 import { appState } from './state/appState';
+
+/**
+ * API interface exposed on window for headless rendering via Puppeteer
+ */
+export interface CueAPI {
+    generateForAPI: (width: number, height: number, dimensions?: PromptDimensions) => Promise<string>;
+    isReady: boolean;
+}
+
+declare global {
+    interface Window {
+        cueAPI: CueAPI;
+    }
+}
 
 const sketch = (p: p5) => {
     let shaderRenderer: ShaderRenderer;
@@ -280,6 +294,117 @@ const sketch = (p: p5) => {
         ui.hideProgress();
     }
 
+    /**
+     * Generate image for API - renders at full resolution and returns data URL.
+     * This bypasses the UI and preview rendering for headless use.
+     */
+    async function generateForAPI(
+        targetWidth: number,
+        targetHeight: number,
+        dimensions: PromptDimensions = DEFAULT_DIMENSIONS
+    ): Promise<string> {
+        // Resolve config with provided dimensions
+        const config = resolveConfig(undefined, dimensions);
+        
+        // Generate shapes at target resolution
+        const { lines: lineConfig, circles: circleConfig, colors: colorConfig } = config;
+        const lineCount = densityToCount(lineConfig.density, targetWidth, targetHeight);
+        const circleCount = densityToCount(circleConfig.density, targetWidth, targetHeight);
+        
+        const lines = generateLines(p, lineCount, lineConfig, colorConfig);
+        const circles = generateCircles(p, circleCount, circleConfig, colorConfig, CONFIG_TEMPLATE.circles.radius, dimensions);
+        const noiseSeed = p.random(1000);
+        
+        // Check if we need tiled rendering
+        const useTiling = needsTiledRendering(targetWidth, targetHeight);
+        
+        if (!useTiling) {
+            // Simple case: render directly at full resolution
+            const exportP5 = p.createGraphics(targetWidth, targetHeight, p.WEBGL);
+            exportP5.pixelDensity(1);
+            
+            // Compute region data
+            const buffer = p.createGraphics(targetWidth, targetHeight);
+            buffer.pixelDensity(1);
+            buffer.background(255);
+            for (const line of lines) {
+                drawLineToBuffer(buffer, line, targetWidth, targetHeight, 1.0);
+            }
+            for (const circle of circles) {
+                drawCircleToBuffer(buffer, circle, targetWidth, targetHeight, 1.0);
+            }
+            buffer.loadPixels();
+            const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
+            buffer.remove();
+            
+            const exportRenderer = new ShaderRenderer(exportP5, p);
+            exportRenderer.init();
+            exportRenderer.render(regionData, config, noiseSeed, lines, circles, 1.0);
+            
+            const canvas = (exportP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            exportRenderer.dispose();
+            exportP5.remove();
+            
+            return dataUrl;
+        }
+        
+        // Tiled rendering for large images
+        const tiles = calculateTileGrid(targetWidth, targetHeight, MAX_TILE_SIZE);
+        
+        // Compute region data for full image
+        const buffer = p.createGraphics(targetWidth, targetHeight);
+        buffer.pixelDensity(1);
+        buffer.background(255);
+        for (const line of lines) {
+            drawLineToBuffer(buffer, line, targetWidth, targetHeight, 1.0);
+        }
+        for (const circle of circles) {
+            drawCircleToBuffer(buffer, circle, targetWidth, targetHeight, 1.0);
+        }
+        buffer.loadPixels();
+        const fullRegionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
+        buffer.remove();
+        
+        const renderedTiles: { canvas: HTMLCanvasElement; info: TileInfo }[] = [];
+        
+        for (const tile of tiles) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+            
+            const tileP5 = p.createGraphics(tile.width, tile.height, p.WEBGL);
+            tileP5.pixelDensity(1);
+            
+            const tileRegionData = extractTileRegionData(fullRegionData, tile, targetWidth, targetHeight);
+            
+            const tileRenderer = new ShaderRenderer(tileP5, p);
+            tileRenderer.init();
+            
+            const tileConfig: TileConfig = {
+                tileOffset: { x: tile.x, y: tile.y },
+                fullResolution: { width: targetWidth, height: targetHeight },
+            };
+            
+            tileRenderer.render(tileRegionData, config, noiseSeed, lines, circles, 1.0, tileConfig);
+            
+            const tileCanvas = (tileP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
+            
+            const copyCanvas = document.createElement('canvas');
+            copyCanvas.width = tile.width;
+            copyCanvas.height = tile.height;
+            const ctx = copyCanvas.getContext('2d');
+            ctx?.drawImage(tileCanvas, 0, 0);
+            
+            renderedTiles.push({ canvas: copyCanvas, info: tile });
+            
+            tileRenderer.dispose();
+            tileP5.remove();
+        }
+        
+        const finalCanvas = compositeTiles(renderedTiles, targetWidth, targetHeight);
+        return finalCanvas.toDataURL('image/png');
+    }
+
     p.setup = () => {
         p.setAttributes('version', true);  // Use WebGL 2 for built-in derivatives (fwidth)
         p.createCanvas(400, 300, p.WEBGL);
@@ -287,6 +412,12 @@ const sketch = (p: p5) => {
 
         shaderRenderer = new ShaderRenderer(p);
         shaderRenderer.init();
+
+        // Expose API for headless rendering
+        window.cueAPI = {
+            generateForAPI,
+            isReady: true,
+        };
 
         ui = new UI({
             onGenerate: (width, height, seededConfig, dimensions) => {
