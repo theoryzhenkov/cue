@@ -199,9 +199,13 @@ vec3 computeGlassColor(vec2 pixelCoord, float sdfDistance) {
     // sdfDistance is in pixels, higher = further from leading
     float dist = sdfDistance;
 
-    vec2 bleedCoord = pixelCoord * uBleedScale + vec2(uNoiseSeed + regionId * 37.0);
+    // Normalize coordinates to [0,1] range to avoid SwiftShader precision issues
+    vec2 normalizedCoord = pixelCoord / uFullResolution;
+    
+    // Use normalized coords for noise (scale up to maintain visual density)
+    vec2 bleedCoord = normalizedCoord * uBleedScale * 500.0 + vec2(uNoiseSeed * 0.01 + regionId * 0.37);
     float bleedNoise = snoise(bleedCoord);
-    float bleedNoise2 = snoise(bleedCoord * 1.7 + 50.0);
+    float bleedNoise2 = snoise(bleedCoord * 1.7 + 5.0);
 
     // uGlowFalloff is now in pixels (resolution-relative)
     float glowFactor = smoothstep(0.0, uGlowFalloff, dist);
@@ -210,7 +214,8 @@ vec3 computeGlassColor(vec2 pixelCoord, float sdfDistance) {
     float edgeFactor = 1.0 - smoothstep(0.0, uGlowFalloff * 0.3, dist);
     float edgeDarkness = edgeFactor * uEdgeDarken;
 
-    vec2 noiseCoord = pixelCoord * uNoiseScale * 0.005 + vec2(uNoiseSeed + regionId * 100.0);
+    // Use normalized coords for texture noise
+    vec2 noiseCoord = normalizedCoord * uNoiseScale * 2.5 + vec2(uNoiseSeed * 0.01 + regionId * 0.1);
 
     float noise = fbm(noiseCoord, 4) * 0.5 + 0.5;
     float fineNoise = snoise(noiseCoord * 3.0) * 0.5 + 0.5;
@@ -266,7 +271,9 @@ void main() {
 
     vec3 finalColor = mix(glassColor, leadingColor, leadingBlend);
 
-    float grain = filmGrain(pixelCoord, uNoiseSeed);
+    // Use normalized coords for film grain to avoid precision issues
+    vec2 grainCoord = (pixelCoord / uFullResolution) * 1000.0;
+    float grain = filmGrain(grainCoord, uNoiseSeed * 0.01);
     finalColor += grain * uGrainIntensity;
 
     finalColor = clamp(finalColor, 0.0, 1.0);

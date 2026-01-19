@@ -44,7 +44,7 @@ Bun.serve({
       try {
         const imageBuffer = await renderWithBrowser(width, height, dimensions);
         
-        return new Response(imageBuffer, {
+        return new Response(imageBuffer as unknown as BodyInit, {
           headers: {
             "Content-Type": "image/png",
             "Content-Disposition": `inline; filename="cue-${width}x${height}.png"`,
