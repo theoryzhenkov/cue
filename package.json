@@ -17,7 +17,8 @@
     "@types/bun": "latest"
   },
   "dependencies": {
-    "p5": "^1.9.0"
+    "p5": "^1.9.0",
+    "puppeteer": "^24.35.0"
   },
   "module": "index.ts",
   "type": "module",
