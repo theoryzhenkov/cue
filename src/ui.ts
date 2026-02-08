@@ -118,7 +118,7 @@ export class UI {
 
         modal.innerHTML = `
             <h1 class="cue-title">Cue</h1>
-            <p class="cue-subtitle">Generative stained glass</p>
+            <p class="cue-subtitle"></p>
             
             <div class="cue-prompt-section">
                 <textarea 
