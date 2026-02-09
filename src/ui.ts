@@ -6,7 +6,21 @@ import { RESOLUTION_PRESETS, Resolution } from './config/constants';
 import { analyzePrompt } from './llms/promptAnalyzer';
 import { PromptDimensions, DEFAULT_DIMENSIONS, AppConfig } from './config/types';
 import { resolveConfig } from './config/seedConfig';
+import { createElement, HelpCircle, Settings, Download, Eye, EyeOff, ChevronDown } from 'lucide';
 import './theme/ui.css';
+
+/**
+ * Create an SVG string from a Lucide icon
+ */
+function createIconSVG(icon: any, size: number = 18): string {
+    const svg = createElement(icon);
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.setAttribute('stroke-width', '1.5');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('fill', 'none');
+    return svg.outerHTML;
+}
 
 const API_KEY_STORAGE_KEY = 'cue-anthropic-api-key';
 
@@ -20,6 +34,7 @@ export interface UICallbacks {
  */
 export class UI {
     private modal: HTMLElement | null = null;
+    private apiDocsModal: HTMLElement | null = null;
     private controlsBar: HTMLElement | null = null;
     private selectedResolution: Resolution;
     private defaultPresetIndex: number;
@@ -140,9 +155,7 @@ export class UI {
                         `).join('')}
                         <option value="custom">Custom</option>
                     </select>
-                    <svg class="cue-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M6 9l6 6 6-6"/>
-                    </svg>
+                    <span class="cue-select-chevron">${createIconSVG(ChevronDown, 14)}</span>
                 </div>
                 
                 <div class="cue-custom-inputs">
@@ -162,10 +175,7 @@ export class UI {
                         value="${storedApiKey}"
                     >
                     <button class="cue-api-key-toggle" id="api-key-toggle" type="button">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
+                        ${createIconSVG(Eye, 16)}
                     </button>
                 </div>
             </div>
@@ -226,6 +236,8 @@ export class UI {
             const isPassword = apiKeyInput.type === 'password';
             apiKeyInput.type = isPassword ? 'text' : 'password';
             apiKeyToggle.classList.toggle('visible', isPassword);
+            // Update icon
+            apiKeyToggle.innerHTML = isPassword ? createIconSVG(EyeOff, 16) : createIconSVG(Eye, 16);
         });
 
         apiKeyInput?.addEventListener('blur', () => {
@@ -276,25 +288,26 @@ export class UI {
         controls.className = 'cue-controls';
 
         controls.innerHTML = `
+            <button class="cue-icon-btn" id="btn-api-docs" title="API documentation">
+                ${createIconSVG(HelpCircle)}
+            </button>
             <span class="resolution-label">0 × 0</span>
             <div class="cue-controls-divider"></div>
             <button class="cue-icon-btn" id="btn-settings" title="Change resolution">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                </svg>
+                ${createIconSVG(Settings)}
             </button>
             <button class="cue-icon-btn" id="btn-download" title="Download image">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                    <polyline points="7,10 12,15 17,10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
+                ${createIconSVG(Download)}
             </button>
         `;
 
         document.body.appendChild(controls);
         this.controlsBar = controls;
+
+        const apiDocsBtn = controls.querySelector('#btn-api-docs');
+        apiDocsBtn?.addEventListener('click', () => {
+            this.showApiDocs();
+        });
 
         const settingsBtn = controls.querySelector('#btn-settings');
         settingsBtn?.addEventListener('click', () => {
@@ -340,5 +353,136 @@ export class UI {
     hideProgress(): void {
         const progress = document.querySelector('.cue-progress');
         progress?.classList.remove('visible');
+    }
+
+    /**
+     * Show API documentation modal
+     */
+    showApiDocs(): void {
+        if (!this.apiDocsModal) {
+            this.createApiDocsModal();
+        }
+        this.apiDocsModal?.classList.add('visible');
+    }
+
+    /**
+     * Hide API documentation modal
+     */
+    hideApiDocs(): void {
+        if (this.apiDocsModal) {
+            this.apiDocsModal.classList.remove('visible');
+        }
+    }
+
+    private createApiDocsModal(): void {
+        const overlay = document.createElement('div');
+        overlay.className = 'cue-modal-overlay';
+        overlay.id = 'api-docs-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'cue-modal cue-api-docs-modal';
+
+        const baseUrl = 'https://cue.theor.net';
+
+        modal.innerHTML = `
+            <h1 class="cue-title">API Documentation</h1>
+            
+            <div class="cue-api-docs-content">
+                <section class="cue-api-docs-section">
+                    <h2 class="cue-api-docs-heading">Endpoint</h2>
+                    <code class="cue-api-docs-code">GET ${baseUrl}/api/generate</code>
+                </section>
+
+                <section class="cue-api-docs-section">
+                    <h2 class="cue-api-docs-heading">Parameters</h2>
+                    <table class="cue-api-docs-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Range</th>
+                                <th>Default</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>width</code></td>
+                                <td>number</td>
+                                <td>100-8192</td>
+                                <td>1920</td>
+                                <td>Image width in pixels</td>
+                            </tr>
+                            <tr>
+                                <td><code>height</code></td>
+                                <td>number</td>
+                                <td>100-8192</td>
+                                <td>1080</td>
+                                <td>Image height in pixels</td>
+                            </tr>
+                            <tr>
+                                <td><code>valence</code></td>
+                                <td>number</td>
+                                <td>0-1</td>
+                                <td>0.5</td>
+                                <td>Emotional tone (0 = negative/dark, 1 = positive/bright)</td>
+                            </tr>
+                            <tr>
+                                <td><code>arousal</code></td>
+                                <td>number</td>
+                                <td>0-1</td>
+                                <td>0.5</td>
+                                <td>Energy level (0 = calm/minimal, 1 = energetic/complex)</td>
+                            </tr>
+                            <tr>
+                                <td><code>focus</code></td>
+                                <td>number</td>
+                                <td>0-1</td>
+                                <td>0.5</td>
+                                <td>Clarity/sharpness (0 = diffuse/dreamy, 1 = sharp/precise)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="cue-api-docs-section">
+                    <h2 class="cue-api-docs-heading">Response</h2>
+                    <p>Returns a PNG image with:</p>
+                    <ul class="cue-api-docs-list">
+                        <li><strong>Content-Type:</strong> <code>image/png</code></li>
+                        <li><strong>Content-Disposition:</strong> <code>inline; filename="cue-{width}x{height}.png"</code></li>
+                        <li><strong>Cache-Control:</strong> <code>no-cache</code></li>
+                    </ul>
+                </section>
+
+                <section class="cue-api-docs-section">
+                    <h2 class="cue-api-docs-heading">Example</h2>
+                    <pre class="cue-api-docs-pre"><code>${baseUrl}/api/generate?width=1920&height=1080&valence=0.7&arousal=0.6&focus=0.8</code></pre>
+                </section>
+
+                <section class="cue-api-docs-section">
+                    <h2 class="cue-api-docs-heading">cURL Example</h2>
+                    <pre class="cue-api-docs-pre"><code>curl "${baseUrl}/api/generate?width=1920&height=1080&valence=0.7&arousal=0.6&focus=0.8" \\
+  --output cue-image.png</code></pre>
+                </section>
+            </div>
+
+            <button class="cue-generate-btn" id="api-docs-close">Close</button>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        this.apiDocsModal = overlay;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.hideApiDocs();
+            }
+        });
+
+        const closeBtn = modal.querySelector('#api-docs-close');
+        closeBtn?.addEventListener('click', () => {
+            this.hideApiDocs();
+        });
     }
 }

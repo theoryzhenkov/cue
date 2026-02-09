@@ -17,6 +17,7 @@
     "@types/bun": "latest"
   },
   "dependencies": {
+    "lucide": "^0.563.0",
     "p5": "^1.9.0",
     "puppeteer": "^24.35.0"
   },
