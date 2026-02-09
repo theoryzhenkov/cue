@@ -1,6 +1,9 @@
+import { join } from "path";
 import index from "./index.html";
 import { renderWithBrowser, initBrowserPool } from "./src/api/renderer";
 import { PromptDimensions, DEFAULT_DIMENSIONS } from "./src/config/types";
+
+const PUBLIC_DIR = join(import.meta.dir, "public");
 
 /**
  * Parse numeric query parameter with bounds checking
@@ -62,6 +65,12 @@ Bun.serve({
         );
       }
     },
+  },
+  async fetch(req) {
+    const pathname = new URL(req.url).pathname;
+    const file = Bun.file(join(PUBLIC_DIR, pathname));
+    if (await file.exists()) return new Response(file);
+    return new Response("Not Found", { status: 404 });
   },
   development: {
     hmr: true,
