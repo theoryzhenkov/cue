@@ -15,9 +15,17 @@ import { clamp } from '../utility/math';
 import ANALYSIS_PROMPT_TEMPLATE from '../config/prompt.txt' with { type: 'text' };
 
 function extractJson(content: string): { valence?: number; arousal?: number; focus?: number } {
-    // The model is asked for JSON only, but be defensive: pull the first {...} block.
-    const match = content.match(/\{[\s\S]*\}/);
-    return JSON.parse(match ? match[0] : content);
+    // The expected payload is a flat {"valence":..,"arousal":..,"focus":..} object.
+    // Match flat {...} regions (no nesting) so stray braces in surrounding prose
+    // (e.g. a reasoning model's chain-of-thought) don't corrupt extraction.
+    const candidates = content.match(/\{[^{}]*\}/g) || [];
+    for (const c of candidates) {
+        try {
+            const obj = JSON.parse(c);
+            if (obj && typeof obj === 'object') return obj;
+        } catch { /* try next */ }
+    }
+    return JSON.parse(content);
 }
 
 /**
@@ -47,7 +55,7 @@ export async function runLlmRequest(prompt: string, config: LlmConfig): Promise<
         };
         body = {
             model: config.model,
-            max_tokens: 100,
+            max_tokens: 4096,
             messages: [{ role: 'user', content: userContent }],
         };
     } else {
@@ -58,7 +66,7 @@ export async function runLlmRequest(prompt: string, config: LlmConfig): Promise<
         };
         body = {
             model: config.model,
-            max_tokens: 100,
+            max_tokens: 4096,
             messages: [{ role: 'user', content: userContent }],
             response_format: { type: 'json_object' },
         };
@@ -76,13 +84,23 @@ export async function runLlmRequest(prompt: string, config: LlmConfig): Promise<
     }
 
     const data = await response.json();
-    const content =
-        config.provider === 'anthropic'
-            ? data.content?.[0]?.text
-            : data.choices?.[0]?.message?.content;
+
+    let content: string | undefined;
+    if (config.provider === 'anthropic') {
+        content = data.content?.[0]?.text;
+    } else {
+        const message = data.choices?.[0]?.message;
+        // Reasoning models (e.g. GLM/Qwen) may leave `content` empty and put their
+        // chain-of-thought in `reasoning_content`; fall back to it.
+        content = message?.content || message?.reasoning_content;
+    }
 
     if (!content) {
-        throw new Error('No response content from API');
+        throw new Error(
+            'The model returned an empty response. If it is a reasoning model, ' +
+            'it may have exhausted the token budget before producing an answer — ' +
+            'try a non-reasoning model.'
+        );
     }
 
     const parsed = extractJson(content);
