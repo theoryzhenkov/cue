@@ -21,6 +21,7 @@ export interface TileConfig {
 export interface RegionData {
     ids: Uint8Array;
     colors: HSB[];
+    glass: Uint8Array;
 }
 
 /**
@@ -116,6 +117,7 @@ export class ShaderRenderer {
     private shader: p5.Shader | null = null;
     private regionTex: p5.Graphics | null = null;
     private colorsTex: p5.Graphics | null = null;
+    private glassTex: p5.Graphics | null = null;
     
     /** The WebGL renderer to draw to */
     private renderer: p5 | p5.Graphics;
@@ -174,6 +176,7 @@ export class ShaderRenderer {
         // Create/update textures
         this.updateRegionTexture(data.ids, width, height);
         this.updateColorsTexture(data.colors);
+        this.updateGlassTexture(data.glass);
 
         // Apply shader
         this.renderer.shader(this.shader);
@@ -181,6 +184,7 @@ export class ShaderRenderer {
         // Set texture uniforms
         this.shader.setUniform('uRegionTex', this.regionTex!);
         this.shader.setUniform('uColorsTex', this.colorsTex!);
+        this.shader.setUniform('uGlassTex', this.glassTex!);
 
         // Resolution for pixel-space calculations
         this.shader.setUniform('uResolution', [width, height]);
@@ -231,6 +235,14 @@ export class ShaderRenderer {
         this.shader.setUniform('uColorBleed', config.watercolor.colorBleed);
         this.shader.setUniform('uSaturationBleed', config.watercolor.saturationBleed);
         this.shader.setUniform('uBleedScale', config.watercolor.bleedScale / previewScale);
+
+        // Glass texture uniforms (per-region reflective glass pane). Effect is defined
+        // in normalized image space, so no preview scaling is needed.
+        this.shader.setUniform('uGlassStrength', config.glass.strength);
+        this.shader.setUniform('uGlassRoughness', config.glass.roughness);
+        this.shader.setUniform('uGlassSpecular', config.glass.specular);
+        this.shader.setUniform('uGlassFresnel', config.glass.fresnel);
+        this.shader.setUniform('uGlassStreakScale', config.glass.streakScale);
 
         // Draw full-screen quad to trigger fragment shader
         this.renderer.rect(0, 0, width, height);
@@ -296,10 +308,36 @@ export class ShaderRenderer {
     }
 
     /**
+     * Create 256x1 texture with per-region glass flags (R channel = 0 or 255)
+     */
+    private updateGlassTexture(glass: Uint8Array): void {
+        if (!this.glassTex) {
+            this.glassTex = this.p5Instance.createGraphics(256, 1);
+            this.glassTex.pixelDensity(1);
+        }
+
+        this.glassTex.loadPixels();
+        const pixels = this.glassTex.pixels;
+
+        for (let i = 0; i < 256 * 4; i++) {
+            pixels[i] = 0;
+        }
+
+        for (let i = 0; i < glass.length && i < 256; i++) {
+            const idx = i * 4;
+            pixels[idx] = glass[i] ? 255 : 0;
+            pixels[idx + 3] = 255;
+        }
+
+        this.glassTex.updatePixels();
+    }
+
+    /**
      * Clean up resources
      */
     dispose(): void {
         this.regionTex?.remove();
         this.colorsTex?.remove();
+        this.glassTex?.remove();
     }
 }

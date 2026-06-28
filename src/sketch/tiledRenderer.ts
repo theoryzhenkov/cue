@@ -128,6 +128,7 @@ export function extractTileRegionData(
     return {
         ids: tileIds,
         colors: fullRegionData.colors, // Colors are shared (indexed by region ID)
+        glass: fullRegionData.glass,   // Glass flags are shared (indexed by region ID)
     };
 }
 

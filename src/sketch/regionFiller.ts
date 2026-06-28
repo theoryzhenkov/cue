@@ -10,6 +10,7 @@ import { LINE_THRESHOLD, BOUNDARY_ID } from '../config/constants';
 export interface RegionData {
     ids: Uint8Array;    // Region ID per pixel (0-254 = regions, 255 = boundary)
     colors: HSB[];      // Color for each region
+    glass: Uint8Array;   // 256x1 per-region glass flag (1 = reflective glass texture)
 }
 
 /**
@@ -27,12 +28,14 @@ interface Span {
  * Distance effects are computed analytically in the shader using SDF.
  * 
  * @param config - Color parameters from AppConfig
+ * @param glassCoverage - Fraction of regions (0-1) that receive the glass texture
  */
 export function detectRegions(
     linePixels: Uint8ClampedArray,
     width: number,
     height: number,
-    config: ColorConfig
+    config: ColorConfig,
+    glassCoverage: number = 0
 ): RegionData {
     const totalPixels = width * height;
 
@@ -52,6 +55,7 @@ export function detectRegions(
 
     // Flood fill to assign region IDs
     const colors: HSB[] = [];
+    const glass = new Uint8Array(256);
     let regionId = 0;
     let maxRegionsReached = false;
 
@@ -88,6 +92,9 @@ export function detectRegions(
                 b: Math.max(0, Math.min(1, brightness)) 
             });
 
+            // Randomly flag this region for the reflective glass texture.
+            glass[regionId] = Math.random() < glassCoverage ? 1 : 0;
+
             // Flood fill this region with the current ID
             fillRegion(ids, visited, width, height, x, y, regionId);
 
@@ -95,7 +102,7 @@ export function detectRegions(
         }
     }
 
-    return { ids, colors };
+    return { ids, colors, glass };
 }
 
 /**

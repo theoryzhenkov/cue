@@ -57,13 +57,13 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
         },
         radius: {
             type: ConfigValueType.SEEDED,
-            range: [0.1, 0.2],  // fraction of smaller dimension; radius of each step circle
+            range: [0.08, 0.4],  // fraction of smaller dimension; radius of each step circle
             beta: [1.5, 1.5]
         },
         // Chord length (endpoint distance) bounds as a fraction of the smaller dimension.
         // Clamped to the step circle's diameter (2 * radius) at runtime.
         minDistance: 0.2,
-        maxDistance: 0.6,
+        maxDistance: 0.8,
         iterations: 8
     },
 
@@ -143,5 +143,43 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
             seed: { dimension: 'focus', influence: 0.4 }
         },
         bleedScale: 0.0005
+    },
+
+    glass: {
+        // Fraction of regions that receive the reflective glass texture.
+        coverage: {
+            type: ConfigValueType.SEEDED,
+            range: [0.15, 0.45],
+            beta: [2, 2],
+            seed: { dimension: 'arousal', influence: 0.6 }
+        },
+        // Reflectivity intensity: scales specular highlights (0-1).
+        strength: {
+            type: ConfigValueType.SEEDED,
+            range: [0.1, 0.3],
+            beta: [2, 2],
+            seed: { dimension: 'focus', influence: 0.4 }
+        },
+        // Surface roughness (0 = sharp specular streaks, 1 = broad sheen).
+        roughness: {
+            type: ConfigValueType.SEEDED,
+            range: [0.3, 0.8],
+            beta: [2, 2],
+            seed: { dimension: 'focus', influence: 0.5 }
+        },
+        // Specular highlight intensity.
+        specular: {
+            type: ConfigValueType.SEEDED,
+            range: [0.1, 0.4],
+            beta: [2, 2]
+        },
+        // Schlick f0, rim reflectivity.
+        fresnel: {
+            type: ConfigValueType.SEEDED,
+            range: [0.01, 0.10],
+            beta: [2, 2]
+        },
+        // Noise scale for the streak normal map (plain, like stainedGlass.noiseScale).
+        streakScale: 3.0
     }
 };

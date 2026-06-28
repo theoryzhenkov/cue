@@ -142,7 +142,7 @@ const sketch = (p: p5) => {
         }
         
         buffer.loadPixels();
-        const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, width, height, config.colors);
+        const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, width, height, config.colors, config.glass.coverage);
         buffer.remove();
         
         return regionData;
@@ -349,7 +349,7 @@ const sketch = (p: p5) => {
                 drawCurveToBuffer(buffer, curve, targetWidth, targetHeight, 1.0);
             }
             buffer.loadPixels();
-            const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
+            const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors, config.glass.coverage);
             buffer.remove();
             
             const exportRenderer = new ShaderRenderer(exportP5, p);
@@ -382,7 +382,7 @@ const sketch = (p: p5) => {
             drawCurveToBuffer(buffer, curve, targetWidth, targetHeight, 1.0);
         }
         buffer.loadPixels();
-        const fullRegionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
+        const fullRegionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors, config.glass.coverage);
         buffer.remove();
         
         const renderedTiles: { canvas: HTMLCanvasElement; info: TileInfo }[] = [];

@@ -100,6 +100,27 @@ export interface CurveConfigTemplate {
     iterations: number;
 }
 
+/**
+ * Glass texture template. A reflective glass-pane surface applied to a random
+ * subset of regions (per-region flag). Preserves the region's stained-glass color
+ * and layers on specular streaks + fresnel rim + subtle refraction. All effect
+ * parameters are SeededValue so they respond to prompt dimensions like the shapes.
+ * - coverage: fraction of regions that receive the glass texture.
+ * - strength: reflectivity intensity (scales specular highlights).
+ * - roughness: surface roughness (0 = sharp streaks, 1 = broad/sheeny).
+ * - specular: highlight intensity.
+ * - fresnel: Schlick f0, rim reflectivity.
+ * - streakScale: noise scale for the streak normal map (plain, like noiseScale).
+ */
+export interface GlassConfigTemplate {
+    coverage: SeededValue;
+    strength: SeededValue;
+    roughness: SeededValue;
+    specular: SeededValue;
+    fresnel: SeededValue;
+    streakScale: number;
+}
+
 export interface ColorConfigTemplate {
     hueBase: SeededValue;
     hueRange: SeededValue;
@@ -139,6 +160,7 @@ export interface ConfigTemplate {
     stainedGlass: StainedGlassTemplate;
     watercolor: WatercolorTemplate;
     leading: LeadingConfigTemplate;
+    glass: GlassConfigTemplate;
 }
 
 /**
@@ -151,6 +173,7 @@ export type AppConfig = Resolved<ConfigTemplate>;
 export type LineShapeConfig = Resolved<LineConfigTemplate>;
 export type CircleShapeConfig = Resolved<CircleConfigTemplate>;
 export type CurveShapeConfig = Resolved<CurveConfigTemplate>;
+export type GlassEffect = Resolved<GlassConfigTemplate>;
 export type ColorConfig = Resolved<ColorConfigTemplate>;
 export type StainedGlassEffect = Resolved<StainedGlassTemplate>;
 export type WatercolorEffect = Resolved<WatercolorTemplate>;

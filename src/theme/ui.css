@@ -1,21 +1,34 @@
+/* Fonts (@font-face) live in index.html so Bun serves them as static assets
+   at /fonts/... rather than trying to bundle the url() references at import time. */
 :root {
-    --cue-bg: #fff;
-    --cue-surface: #f8f8f8;
-    --cue-surface-hover: #f0f0f0;
-    --cue-border: #ccc;
-    --cue-text: #111;
-    --cue-text-dim: #666;
-    --cue-accent: #005;
-    --cue-error: #900;
+    /* Palette harmonized with the home (theornet) site light theme. */
+    --cue-page: #F4F4F2;            /* desk / page background (home --color-bg) */
+    --cue-bg: #FBFBF9;             /* paper: modal + controls surface (home --color-paper) */
+    --cue-surface: #ECECE8;         /* code/table chrome (home --color-bg-subtle) */
+    --cue-surface-hover: #E2E2DC;   /* (home --color-bg-muted) */
+    --cue-border: #CFCFC7;          /* (home --color-border) */
+    --cue-text: #1F1F1C;            /* (home --color-text) */
+    --cue-text-dim: #4E4E49;        /* (home --color-text-muted) */
+    --cue-accent: #3A4E68;          /* slate blue (home --color-accent) */
+    --cue-accent-hover: color-mix(in oklch, #3A4E68 80%, black);
+    --cue-accent-active: color-mix(in oklch, #3A4E68 65%, black);
+    --cue-error: #8B3A3A;           /* (home --color-error) */
+    --cue-highlight: #E1E7EF;       /* (home --color-highlight) */
     --cue-font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --cue-font-mono: 'Consolas', 'Monaco', 'Liberation Mono', monospace;
+    --cue-font-serif: 'Source Serif 4', Georgia, serif;
+    --cue-font-mono: 'Commit Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+::selection {
+    background-color: var(--cue-highlight);
+    color: var(--cue-text);
 }
 
 /* Modal Overlay */
 .cue-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(244, 244, 242, 0.88);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -50,9 +63,10 @@
 
 /* Typography */
 .cue-title {
-    font-family: var(--cue-font-sans);
+    font-family: var(--cue-font-serif);
     font-size: 1.5rem;
-    font-weight: 700;
+    font-weight: 650;
+    letter-spacing: -0.01em;
     color: var(--cue-text);
     margin: 0 0 4px 0;
     line-height: 1.2;
@@ -297,11 +311,11 @@
 }
 
 .cue-generate-btn:hover {
-    background: #00a;
+    background: var(--cue-accent-hover);
 }
 
 .cue-generate-btn:active {
-    background: #003;
+    background: var(--cue-accent-active);
 }
 
 .cue-generate-btn:disabled {

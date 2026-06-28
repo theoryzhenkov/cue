@@ -52,6 +52,14 @@ uniform float uColorBleed;         // Hue shift within regions
 uniform float uSaturationBleed;    // Saturation variation
 uniform float uBleedScale;         // Scale of color bleeding pattern
 
+// Glass texture parameters (per-region reflective glass pane)
+uniform sampler2D uGlassTex;       // 256x1, R = glass flag (0/1) per region
+uniform float uGlassStrength;      // refraction distortion + effect intensity (0-1)
+uniform float uGlassRoughness;     // surface roughness (0 = sharp streaks, 1 = broad)
+uniform float uGlassSpecular;      // specular highlight intensity (0-1)
+uniform float uGlassFresnel;       // fresnel f0, rim reflectivity (0-~0.3)
+uniform float uGlassStreakScale;  // noise scale for the streak normal map
+
 /**
  * Signed distance to a line segment from point p to segment (a, b)
  */
@@ -280,6 +288,107 @@ float filmGrain(vec2 coord, float seed) {
     return fract(sin(dot(coord + seed, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
 }
 
+// ===== Vendored from the LYGIA shader library (https://lygia.xyz) — Patricio Gonzalez Vivo.
+// License: Prosperity License 3.0.0 (https://prosperitylicense.com/versions/3.0.0):
+//   free for individuals, non-commercial use, and companies below the revenue threshold;
+//   a Patron License is required for larger commercial use.
+// Functions: pow5, saturate, schlick, fresnel. #include directives resolved inline. =====
+#ifndef FNC_POW5
+#define FNC_POW5
+float pow5(const in float v) { float v2 = v * v; return v2 * v2 * v; }
+vec2 pow5(const in vec2 v) { vec2 v2 = v * v; return v2 * v2 * v; }
+vec3 pow5(const in vec3 v) { vec3 v2 = v * v; return v2 * v2 * v; }
+vec4 pow5(const in vec4 v) { vec4 v2 = v * v; return v2 * v2 * v; }
+#endif
+
+#ifndef FNC_SATURATE
+#define FNC_SATURATE
+float saturate(const in float v) { return clamp(v, 0.0, 1.0); }
+vec2 saturate(const in vec2 v) { return clamp(v, vec2(0.0), vec2(1.0)); }
+vec3 saturate(const in vec3 v) { return clamp(v, vec3(0.0), vec3(1.0)); }
+vec4 saturate(const in vec4 v) { return clamp(v, vec4(0.0), vec4(1.0)); }
+#endif
+
+#ifndef FNC_SCHLICK
+#define FNC_SCHLICK
+vec3 schlick(const in vec3 f0, const in float f90, const in float VoH) {
+    float f = pow5(1.0 - VoH);
+    return f + f0 * (f90 - f);
+}
+float schlick(const in float f0, const in float f90, const in float VoH) {
+    return f0 + (f90 - f0) * pow5(1.0 - VoH);
+}
+#endif
+
+#ifndef FNC_FRESNEL
+#define FNC_FRESNEL
+vec3 fresnel(const in vec3 f0, vec3 normal, vec3 view) {
+    return schlick(f0, 1.0, dot(view, normal));
+}
+vec3 fresnel(const in vec3 f0, const in float NoV) {
+    float f90 = saturate(dot(f0, vec3(50.0 * 0.33)));
+    return schlick(f0, f90, NoV);
+}
+float fresnel(const in float f0, const in float NoV) {
+    return schlick(f0, 1.0, NoV);
+}
+#endif
+// ===== end LYGIA vendored block =====
+
+/**
+ * Reflective glass-pane surface, applied only to regions flagged as glass.
+ * Preserves the (already shaded) base stained-glass color and layers on:
+ *   - a noise-derived streaky surface normal (pseudo-relief),
+ *   - fresnel reflectivity (LYGIA fresnel),
+ *   - a Blinn-Phong specular highlight (the moving streaks of light).
+ * Purely a surface effect: it does NOT sample/refract the region map, so it does
+ * not mirror the leading (lines/curves/circles) as ghost/shadow lines. The normal
+ * is computed in normalized image space so the effect is resolution-independent
+ * and tiles consistently.
+ */
+vec3 applyGlass(vec2 pixelCoord, vec3 baseColor) {
+    // Streaky surface relief from anisotropic noise. The gradient delta must be
+    // in noise-UV space (~feature scale), NOT pixel space, or the normal comes
+    // out flat and the specular vanishes.
+    vec2 nc = pixelCoord / uFullResolution;
+    vec2 uv = nc * uGlassStreakScale + vec2(uNoiseSeed * 0.02);
+    uv.x *= 0.5;  // stretch -> long horizontal streaks
+    float eps = 0.6;  // noise-UV step (~feature scale)
+    float h  = snoise(uv);
+    float hx = snoise(uv + vec2(eps, 0.0));
+    float hy = snoise(uv + vec2(0.0, eps));
+    float dHx = (hx - h) / eps;
+    float dHy = (hy - h) / eps;
+    // Rougher surfaces are bumpier; bump sets how far the normal tilts off +Z.
+    float bump = 0.15 + uGlassRoughness * 0.6;
+    vec3 N = normalize(vec3(-dHx * bump, -dHy * bump, 1.0));
+
+    // Slightly off-axis view + fixed light so reflectivity varies across the pane.
+    vec3 V = normalize(vec3(0.12, 0.10, 1.0));
+    vec3 L = normalize(vec3(0.4, 0.45, 0.8));
+    vec3 H = normalize(L + V);
+    float NoV = clamp(dot(N, V), 0.0, 1.0);
+    float NoH = clamp(dot(N, H), 0.0, 1.0);
+
+    // Fresnel reflectivity (LYGIA). Near-normal view -> ~f0, a faint uniform sheen.
+    float fres = fresnel(uGlassFresnel, NoV);
+    // Lower shininess = broader, clearly visible streaks.
+    float shininess = mix(60.0, 6.0, uGlassRoughness);
+    float spec = pow(NoH, shininess);
+
+    // No refraction: sampling the region texture through the pane displaced the
+    // region boundaries (and the leading = lines/curves/circles) into ghost/shadow
+    // mirrored lines, which looked dirty. Glass here is purely a surface effect:
+    // specular streaks + fresnel sheen over the preserved region color.
+    // Base terms keep the effect visible across the full config range (low
+    // strength/specular still reads as glass); params modulate intensity.
+    vec3 col = baseColor;
+    float specAmt = (0.5 + uGlassSpecular * 2.0) * (0.5 + uGlassStrength);
+    col += vec3(spec) * specAmt;
+    col += fres * vec3(0.6, 0.7, 0.95) * (0.4 + uGlassStrength);
+    return col;
+}
+
 /**
  * Compute glass color using analytical SDF for distance-based effects.
  * This eliminates tiling artifacts by computing distance directly from shapes
@@ -348,7 +457,14 @@ vec3 computeGlassColor(vec2 pixelCoord, float sdfDistance) {
     // Additional subtle hue shift from fine noise
     hsb.x = fract(hsb.x + noiseEffect * 0.02);
 
-    return hsb2rgb(hsb);
+    vec3 col = hsb2rgb(hsb);
+    // Per-region reflective glass texture: preserves the stained-glass color,
+    // layers on specular streaks + fresnel rim + subtle refraction.
+    float glassFlag = texture(uGlassTex, vec2(regionId, 0.5)).r;
+    if (glassFlag > 0.5) {
+        col = applyGlass(pixelCoord, col);
+    }
+    return col;
 }
 
 void main() {
