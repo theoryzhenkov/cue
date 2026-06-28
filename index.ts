@@ -1,6 +1,7 @@
 import { join } from "path";
 import index from "./index.html";
 import { renderWithBrowser, initBrowserPool } from "./src/api/renderer";
+import { runLlmRequest } from "./src/api/llmProxy";
 import { PromptDimensions, DEFAULT_DIMENSIONS } from "./src/config/types";
 
 const PUBLIC_DIR = join(import.meta.dir, "public");
@@ -62,6 +63,26 @@ Bun.serve({
             status: 500,
             headers: { "Content-Type": "application/json" },
           }
+        );
+      }
+    },
+
+    "/api/analyze": async (req) => {
+      try {
+        const body = await req.json();
+        const dimensions = await runLlmRequest(body.prompt, {
+          provider: body.provider,
+          endpoint: body.endpoint,
+          model: body.model,
+          apiKey: body.apiKey,
+        });
+        return new Response(JSON.stringify(dimensions), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ error: (error as Error).message }),
+          { status: 502, headers: { "Content-Type": "application/json" } }
         );
       }
     },
