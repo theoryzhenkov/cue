@@ -72,7 +72,7 @@ export async function runLlmRequest(prompt: string, config: LlmConfig): Promise<
 
     if (!response.ok) {
         const error = await response.text();
-        throw new Error(`API error: ${response.status} - ${error}`);
+        throw new Error(`API error: ${response.status} ${response.statusText} — ${url}\n${error}`);
     }
 
     const data = await response.json();
