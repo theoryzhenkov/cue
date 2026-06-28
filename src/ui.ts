@@ -212,9 +212,9 @@ export class UI {
                         <option value="anthropic" ${llmCfg.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
                         <option value="openai" ${llmCfg.provider === 'openai' ? 'selected' : ''}>OpenAI-compatible</option>
                     </select>
-                    <input type="text" class="cue-input cue-input--text" id="llm-model" placeholder="model name" value="${llmCfg.model}">
+                    <input type="text" class="cue-input cue-input--text" id="llm-model" placeholder="model name, e.g. gpt-4o-mini" value="${llmCfg.model}">
                 </div>
-                <input type="text" class="cue-input cue-input--text" id="llm-endpoint" placeholder="API base URL" value="${llmCfg.endpoint}">
+                <input type="text" class="cue-input cue-input--text" id="llm-endpoint" placeholder="API base URL, e.g. https://api.openai.com/v1" value="${llmCfg.endpoint}">
                 <div class="cue-api-key-row">
                     <input type="password" class="cue-api-key" id="api-key-input" placeholder="API key (optional)" value="${storedApiKey}">
                     <button class="cue-api-key-toggle" id="api-key-toggle" type="button">

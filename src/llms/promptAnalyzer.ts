@@ -51,6 +51,8 @@ export async function analyzePrompt(prompt: string, config: LlmConfig): Promise<
     }
 
     const userContent = ANALYSIS_PROMPT_TEMPLATE.replace('{PROMPT}', prompt);
+    // Accept either a base URL (e.g. https://api.openai.com/v1) or the full
+    // path (e.g. .../v1/chat/completions); don't double the suffix.
     const base = config.endpoint.replace(/\/+$/, '');
 
     let url: string;
@@ -58,7 +60,7 @@ export async function analyzePrompt(prompt: string, config: LlmConfig): Promise<
     let body: Record<string, unknown>;
 
     if (config.provider === 'anthropic') {
-        url = `${base}/messages`;
+        url = /\/messages$/.test(base) ? base : `${base}/messages`;
         headers = {
             'Content-Type': 'application/json',
             'x-api-key': config.apiKey,
@@ -71,7 +73,7 @@ export async function analyzePrompt(prompt: string, config: LlmConfig): Promise<
             messages: [{ role: 'user', content: userContent }],
         };
     } else {
-        url = `${base}/chat/completions`;
+        url = /\/chat\/completions$/.test(base) ? base : `${base}/chat/completions`;
         headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.apiKey}`,
@@ -84,11 +86,20 @@ export async function analyzePrompt(prompt: string, config: LlmConfig): Promise<
         };
     }
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        });
+    } catch (err) {
+        // Browser fetch rejects (TypeError) on network failure or CORS block.
+        throw new Error(
+            `Could not reach ${url}. Check the endpoint URL and that the ` +
+            `server allows browser requests (CORS). (${(err as Error).message})`
+        );
+    }
 
     if (!response.ok) {
         const error = await response.text();
