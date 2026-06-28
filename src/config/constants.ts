@@ -35,6 +35,9 @@ export const MAX_SHADER_LINES = 40;
 /** Maximum circles supported by shader uniform arrays (GLSL limit) */
 export const MAX_SHADER_CIRCLES = 10;
 
+/** Maximum arcs supported by shader uniform arrays (GLSL limit) */
+export const MAX_SHADER_ARCS = 32;
+
 /** Pixels darker than this threshold are considered boundary lines */
 export const LINE_THRESHOLD = 50;
 

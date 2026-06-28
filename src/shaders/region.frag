@@ -26,12 +26,21 @@ uniform float uNoiseSeed;        // Seed for variation between generations
 // Shape parameters for analytical SDF
 #define MAX_LINES 40
 #define MAX_CIRCLES 10
+#define MAX_ARCS 32
 
 uniform vec4 uLines[MAX_LINES];      // Each vec4 = (x1, y1, x2, y2) in pixel coords
 uniform int uLineCount;
 
 uniform vec3 uCircles[MAX_CIRCLES];  // Each vec3 = (centerX, centerY, radius)
 uniform int uCircleCount;
+
+// Curve arcs for analytical SDF. Each arc is split across two vec4s:
+// uArcCenters = (centerX, centerY, radius, a0)
+// uArcEnds    = (a1, 0, 0, 0)
+// The arc is the minor arc (<= pi) from a0 to a1 in pixel coords / radians.
+uniform vec4 uArcCenters[MAX_ARCS];
+uniform vec4 uArcEnds[MAX_ARCS];
+uniform int uArcCount;
 
 uniform float uLeadingThickness;
 uniform float uRoundingRadius;
@@ -59,6 +68,61 @@ float sdSegment(vec2 p, vec2 a, vec2 b) {
  */
 float sdCircleBoundary(vec2 p, vec2 center, float radius) {
     return abs(length(p - center) - radius);
+}
+
+/**
+ * Distance to a circular ARC (the 1D curve on the ring), minor arc (<= pi)
+ * from a0 to a1. If the query projects onto the arc's angular span, distance is
+ * to the ring (|radius - dist|); otherwise to the nearer endpoint.
+ */
+float sdArc(vec2 p, vec2 center, float radius, float a0, float a1) {
+    vec2 d = p - center;
+    float theta = atan(d.y, d.x);
+    const float TWO_PI = 6.28318530718;
+    float da = a1 - a0;
+    float sweep = da >= 0.0 ? 1.0 : -1.0;
+    float span = abs(da);
+    // Angular distance from a0 in the sweep direction, in [0, 2*pi)
+    float phi = mod(sweep * (theta - a0), TWO_PI);
+    if (phi <= span) {
+        float rl = length(d);
+        if (rl < 1e-6) return radius;
+        return abs(rl - radius);
+    }
+    vec2 ea = center + radius * vec2(cos(a0), sin(a0));
+    vec2 eb = center + radius * vec2(cos(a1), sin(a1));
+    return min(length(p - ea), length(p - eb));
+}
+
+/**
+ * Gradient of sdArc: unit direction of steepest SDF increase (points away from
+ * the nearest point on the arc). Used to tell whether two arcs meet tangentially
+ * (gradients (anti)parallel, align -> 1) or cross transversally (gradients at
+ * the crossing angle, align < 1). Returns an arbitrary unit vector at degenerate
+ * points lying on the arc itself, where the SDF is 0 and the blend is irrelevant.
+ */
+vec2 gradArc(vec2 p, vec2 center, float radius, float a0, float a1) {
+    vec2 d = p - center;
+    const float TWO_PI = 6.28318530718;
+    float theta = atan(d.y, d.x);
+    float da = a1 - a0;
+    float sweep = da >= 0.0 ? 1.0 : -1.0;
+    float span = abs(da);
+    float phi = mod(sweep * (theta - a0), TWO_PI);
+    if (phi <= span) {
+        float rl = length(d);
+        if (rl < 1e-6) return vec2(1.0, 0.0);
+        return (rl > radius ? 1.0 : -1.0) * d / rl;
+    }
+    vec2 ea = center + radius * vec2(cos(a0), sin(a0));
+    vec2 eb = center + radius * vec2(cos(a1), sin(a1));
+    vec2 pa = p - ea;
+    vec2 pb = p - eb;
+    bool aNearer = dot(pa, pa) < dot(pb, pb);
+    vec2 near = aNearer ? pa : pb;
+    float ln = length(near);
+    if (ln < 1e-6) return vec2(1.0, 0.0);
+    return near / ln;
 }
 
 /**
@@ -94,6 +158,46 @@ float computeLeadingSDF(vec2 pixelPos) {
         vec3 circle = uCircles[i];
         float d = sdCircleBoundary(pixelPos, circle.xy, circle.z);
         minDist = smin(minDist, d, uRoundingRadius);
+    }
+
+    // Curve arcs. Find the two nearest arcs in one linear pass and blend them
+    // with a tangency-aware smin. At a tangent join the two arc SDF gradients are
+    // (anti)parallel (align -> 1), so kEff -> 0 and smin -> min: no fattening, so
+    // no dots at joins. At a transversal crossing the gradients sit at the
+    // crossing angle (align < 1), so kEff > 0 and the crossing is rounded. This
+    // decision is local to the nearest pair, so it rounds self-crossings too
+    // while leaving tangent joins dot-free, in O(n) per pixel. Farther arcs do
+    // not affect the blend (they are >= the 2nd nearest here, and only matter
+    // where they themselves are the nearest, which a different pixel handles).
+    float d0 = 1e10;
+    float d1 = 1e10;
+    vec4 ac0 = vec4(0.0);
+    vec4 ac1 = vec4(0.0);
+    float e0 = 0.0;
+    float e1 = 0.0;
+    for (int i = 0; i < MAX_ARCS; i++) {
+        if (i >= uArcCount) break;
+
+        vec4 ac = uArcCenters[i];
+        float ev = uArcEnds[i].x;
+        float d = sdArc(pixelPos, ac.xy, ac.z, ac.w, ev);
+        if (d < d0) {
+            d1 = d0; ac1 = ac0; e1 = e0;
+            d0 = d; ac0 = ac; e0 = ev;
+        } else if (d < d1) {
+            d1 = d; ac1 = ac; e1 = ev;
+        }
+    }
+
+    if (uArcCount >= 2) {
+        vec2 g0 = gradArc(pixelPos, ac0.xy, ac0.z, ac0.w, e0);
+        vec2 g1 = gradArc(pixelPos, ac1.xy, ac1.z, ac1.w, e1);
+        float align = abs(dot(g0, g1));            // 1 = tangent, 0 = perpendicular
+        float kEff = max(uRoundingRadius * (1.0 - align), 1e-4);
+        float arcBlend = smin(d0, d1, kEff);
+        minDist = smin(minDist, arcBlend, uRoundingRadius);
+    } else if (uArcCount == 1) {
+        minDist = smin(minDist, d0, uRoundingRadius);
     }
 
     return minDist;

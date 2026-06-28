@@ -2,7 +2,7 @@
  * AppState - Single source of truth for application state
  */
 
-import { LineConfig, CircleConfig } from '../sketch/generators';
+import { LineConfig, CircleConfig, CurveConfig } from '../sketch/generators';
 import { AppConfig, PromptDimensions, DEFAULT_DIMENSIONS } from '../config/types';
 import { resolveConfig } from '../config/seedConfig';
 
@@ -14,6 +14,7 @@ export interface GenerationState {
     displayScale: number;
     lines: LineConfig[];
     circles: CircleConfig[];
+    curves: CurveConfig[];
     noiseSeed: number;
     activeConfig: AppConfig;
     promptDimensions: PromptDimensions;
@@ -34,6 +35,7 @@ export class AppState {
             displayScale: 1,
             lines: [],
             circles: [],
+            curves: [],
             noiseSeed: 0,
             activeConfig: resolveConfig(),
             promptDimensions: DEFAULT_DIMENSIONS,
@@ -69,6 +71,10 @@ export class AppState {
         return this.state.circles;
     }
 
+    get curves(): CurveConfig[] {
+        return this.state.curves;
+    }
+
     get noiseSeed(): number {
         return this.state.noiseSeed;
     }
@@ -95,9 +101,10 @@ export class AppState {
         this.state.displayScale = displayScale;
     }
 
-    setShapes(lines: LineConfig[], circles: CircleConfig[]): void {
+    setShapes(lines: LineConfig[], circles: CircleConfig[], curves: CurveConfig[] = []): void {
         this.state.lines = lines;
         this.state.circles = circles;
+        this.state.curves = curves;
     }
 
     setNoiseSeed(seed: number): void {

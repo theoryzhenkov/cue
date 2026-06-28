@@ -77,6 +77,29 @@ export interface CircleConfigTemplate {
     radius: SeededValue;
 }
 
+/**
+ * Curve configuration template.
+ *
+ * A curve is a G1-continuous (tangent-continuous) "walking" line built from a
+ * chain of tangent circles. Each step places a new circle externally tangent to
+ * the previous one at the current point, then walks a random minor arc on it.
+ * External tangency guarantees the arcs share a tangent at every join, so the
+ * result is a single smooth line with no sharp corners.
+ *
+ * - radius: radius of each step circle (fraction of the smaller dimension).
+ * - minDistance / maxDistance: chord length between an arc's endpoints
+ *   (fraction of the smaller dimension). Clamped to the circle's diameter.
+ * - iterations: number of arcs (steps) per curve.
+ */
+export interface CurveConfigTemplate {
+    density: SeededValue;
+    weight: SeededValue;
+    radius: SeededValue;
+    minDistance: number;
+    maxDistance: number;
+    iterations: number;
+}
+
 export interface ColorConfigTemplate {
     hueBase: SeededValue;
     hueRange: SeededValue;
@@ -111,6 +134,7 @@ export interface LeadingConfigTemplate {
 export interface ConfigTemplate {
     lines: LineConfigTemplate;
     circles: CircleConfigTemplate;
+    curves: CurveConfigTemplate;
     colors: ColorConfigTemplate;
     stainedGlass: StainedGlassTemplate;
     watercolor: WatercolorTemplate;
@@ -126,6 +150,7 @@ export type AppConfig = Resolved<ConfigTemplate>;
 // Type aliases for specific sections (for convenience and backwards compatibility)
 export type LineShapeConfig = Resolved<LineConfigTemplate>;
 export type CircleShapeConfig = Resolved<CircleConfigTemplate>;
+export type CurveShapeConfig = Resolved<CurveConfigTemplate>;
 export type ColorConfig = Resolved<ColorConfigTemplate>;
 export type StainedGlassEffect = Resolved<StainedGlassTemplate>;
 export type WatercolorEffect = Resolved<WatercolorTemplate>;

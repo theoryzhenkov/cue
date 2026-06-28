@@ -1,8 +1,8 @@
 import p5 from 'p5';
 import { HSB, hsbObjToRgb } from '../utility/color';
 import { AppConfig } from '../config/types';
-import { MAX_SHADER_LINES, MAX_SHADER_CIRCLES } from '../config/constants';
-import { LineConfig, CircleConfig } from './generators';
+import { MAX_SHADER_LINES, MAX_SHADER_CIRCLES, MAX_SHADER_ARCS } from '../config/constants';
+import { LineConfig, CircleConfig, CurveConfig } from './generators';
 
 // Import shaders as raw strings
 import vertShader from '../shaders/region.vert' with { type: 'text' };
@@ -76,8 +76,42 @@ function packCirclesForShader(circles: CircleConfig[], width: number, height: nu
 }
 
 /**
- * Manages GPU-accelerated region rendering via shaders
+ * Pack curve arcs into two vec4 arrays for shader uniforms.
+ * uArcCenters = (centerX, centerY, radius, a0)
+ * uArcEnds    = (a1, 0, 0, 0)
+ * Denormalizes from [0,1] to pixel coordinates using provided dimensions.
+ * Total arcs across all curves is capped at MAX_SHADER_ARCS.
  */
+function packArcsForShader(curves: CurveConfig[], width: number, height: number): { centers: number[]; ends: number[]; count: number } {
+    const centers: number[] = [];
+    const ends: number[] = [];
+    const smallerDimension = Math.min(width, height);
+    let count = 0;
+
+    outer: for (const curve of curves) {
+        for (const arc of curve.arcs) {
+            if (count >= MAX_SHADER_ARCS) break outer;
+            centers.push(
+                arc.cx * width,
+                arc.cy * height,
+                arc.r * smallerDimension,
+                arc.a0
+            );
+            ends.push(arc.a1, 0, 0, 0);
+            count++;
+        }
+    }
+
+    // Pad to MAX_SHADER_ARCS vec4s
+    while (centers.length < MAX_SHADER_ARCS * 4) {
+        centers.push(0, 0, 0, 0);
+    }
+    while (ends.length < MAX_SHADER_ARCS * 4) {
+        ends.push(0, 0, 0, 0);
+    }
+
+    return { centers, ends, count };
+}
 export class ShaderRenderer {
     private shader: p5.Shader | null = null;
     private regionTex: p5.Graphics | null = null;
@@ -123,6 +157,7 @@ export class ShaderRenderer {
         noiseSeed: number,
         lines: LineConfig[],
         circles: CircleConfig[] = [],
+        curves: CurveConfig[] = [],
         previewScale: number = 1.0,
         tileConfig?: TileConfig
     ): void {
@@ -179,6 +214,12 @@ export class ShaderRenderer {
         const circleData = packCirclesForShader(circles, fullWidth, fullHeight);
         this.shader.setUniform('uCircles', circleData);
         this.shader.setUniform('uCircleCount', Math.min(circles.length, MAX_SHADER_CIRCLES));
+
+        // Curve arc uniforms for analytical SDF (denormalize to full resolution for consistent SDF)
+        const arcData = packArcsForShader(curves, fullWidth, fullHeight);
+        this.shader.setUniform('uArcCenters', arcData.centers);
+        this.shader.setUniform('uArcEnds', arcData.ends);
+        this.shader.setUniform('uArcCount', arcData.count);
 
         // Leading appearance (scaled for preview to match final appearance)
         this.shader.setUniform('uLeadingThickness', config.leading.thickness * previewScale);

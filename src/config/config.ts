@@ -13,7 +13,7 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
     lines: {
         density: {
             type: ConfigValueType.SEEDED,
-            range: [0.2, 1],
+            range: [0.2, 0.6],
             beta: [2, 2],
             seed: { dimension: 'arousal', influence: 0.7 }
         },
@@ -41,6 +41,30 @@ export const CONFIG_TEMPLATE: ConfigTemplate = {
             range: [0.18, 0.55],  // fraction of smaller screen dimension (for example, 0.18 = 18% of smaller screen dimension, if screen is 1920x1080, radius will be 0.18 * 1080 = 194.4) (made to be consistent with other values expressed in density)
             beta: [1.5, 1.5]
         }
+    },
+
+    curves: {
+        density: {
+            type: ConfigValueType.SEEDED,
+            range: [0.02, 0.3],
+            beta: [2, 2],
+            seed: { dimension: 'arousal', influence: 0.6 }
+        },
+        weight: {
+            type: ConfigValueType.SEEDED,
+            range: [8, 10],
+            beta: [1.5, 1.5]
+        },
+        radius: {
+            type: ConfigValueType.SEEDED,
+            range: [0.1, 0.2],  // fraction of smaller dimension; radius of each step circle
+            beta: [1.5, 1.5]
+        },
+        // Chord length (endpoint distance) bounds as a fraction of the smaller dimension.
+        // Clamped to the step circle's diameter (2 * radius) at runtime.
+        minDistance: 0.2,
+        maxDistance: 0.6,
+        iterations: 8
     },
 
     colors: {

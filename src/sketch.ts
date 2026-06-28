@@ -6,6 +6,9 @@ import {
     generateCircles,
     drawCircleToBuffer,
     CircleConfig,
+    generateCurves,
+    drawCurveToBuffer,
+    CurveConfig,
 } from './sketch/generators';
 import { detectRegions, RegionData } from './sketch/regionFiller';
 import { ShaderRenderer, TileConfig } from './sketch/shaderRenderer';
@@ -93,18 +96,21 @@ const sketch = (p: p5) => {
      * Shapes are resolution-independent; weight is constant absolute pixels.
      * Circle radius is sampled from distribution for each circle.
      */
-    function generateShapes(width: number, height: number, config: AppConfig, dimensions: PromptDimensions): { lines: LineConfig[]; circles: CircleConfig[] } {
-        const { lines: lineConfig, circles: circleConfig, colors: colorConfig } = config;
+    function generateShapes(width: number, height: number, config: AppConfig, dimensions: PromptDimensions): { lines: LineConfig[]; circles: CircleConfig[]; curves: CurveConfig[] } {
+        const { lines: lineConfig, circles: circleConfig, curves: curveConfig, colors: colorConfig } = config;
         
         // Calculate shape counts from density at the point of use
         const lineCount = densityToCount(lineConfig.density, width, height);
         const circleCount = densityToCount(circleConfig.density, width, height);
+        const curveCount = densityToCount(curveConfig.density, width, height);
         
         const lines = generateLines(p, lineCount, lineConfig, colorConfig);
         // Pass radius template and dimensions so each circle samples radius independently
         const circles = generateCircles(p, circleCount, circleConfig, colorConfig, CONFIG_TEMPLATE.circles.radius, dimensions);
+        // Curves need target resolution: their tangent-circle geometry is computed in pixel space
+        const curves = generateCurves(p, curveCount, curveConfig, colorConfig, CONFIG_TEMPLATE.curves.radius, dimensions, width, height);
         
-        return { lines, circles };
+        return { lines, circles, curves };
     }
 
     /**
@@ -115,6 +121,7 @@ const sketch = (p: p5) => {
     function computeRegionData(
         lines: LineConfig[],
         circles: CircleConfig[],
+        curves: CurveConfig[],
         width: number,
         height: number,
         config: AppConfig,
@@ -130,6 +137,9 @@ const sketch = (p: p5) => {
         for (const circle of circles) {
             drawCircleToBuffer(buffer, circle, width, height, weightScale);
         }
+        for (const curve of curves) {
+            drawCurveToBuffer(buffer, curve, width, height, weightScale);
+        }
         
         buffer.loadPixels();
         const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, width, height, config.colors);
@@ -144,18 +154,18 @@ const sketch = (p: p5) => {
      * Preview is an accurate scaled-down representation of the final export.
      */
     function renderPreview(): void {
-        const { previewWidth, previewHeight, targetWidth, lines, circles, noiseSeed, activeConfig } = appState.getState();
+        const { previewWidth, previewHeight, targetWidth, lines, circles, curves, noiseSeed, activeConfig } = appState.getState();
         
         // Calculate preview scale (ratio of preview to target resolution)
         // This scales weights and effect parameters so preview looks like a scaled-down final image
         const previewScale = previewWidth / targetWidth;
         
         // Compute region data at preview resolution with scaled weights
-        const regionData = computeRegionData(lines, circles, previewWidth, previewHeight, activeConfig, previewScale);
+        const regionData = computeRegionData(lines, circles, curves, previewWidth, previewHeight, activeConfig, previewScale);
         
         // Render with preview scale for accurate visual representation
         p.background(255);
-        shaderRenderer.render(regionData, activeConfig, noiseSeed, lines, circles, previewScale);
+        shaderRenderer.render(regionData, activeConfig, noiseSeed, lines, circles, curves, previewScale);
     }
 
     /**
@@ -183,8 +193,8 @@ const sketch = (p: p5) => {
         appState.setDimensions(targetWidth, targetHeight, renderWidth, renderHeight, displayScale);
         
         // Generate new shapes at target resolution using seeded config
-        const { lines, circles } = generateShapes(targetWidth, targetHeight, appState.activeConfig, appState.promptDimensions);
-        appState.setShapes(lines, circles);
+        const { lines, circles, curves } = generateShapes(targetWidth, targetHeight, appState.activeConfig, appState.promptDimensions);
+        appState.setShapes(lines, circles, curves);
         appState.setNoiseSeed(p.random(1000));
         
         // Render preview
@@ -205,7 +215,7 @@ const sketch = (p: p5) => {
      * Export full resolution image using tiled rendering if needed
      */
     async function exportFullResolution(): Promise<void> {
-        const { targetWidth, targetHeight, lines, circles, noiseSeed, activeConfig } = appState.getState();
+        const { targetWidth, targetHeight, lines, circles, curves, noiseSeed, activeConfig } = appState.getState();
         
         ui.showProgress('Preparing export...');
         
@@ -220,13 +230,13 @@ const sketch = (p: p5) => {
             exportP5.pixelDensity(1);
             
             // Compute full-res region data with seeded colors
-            const regionData = computeRegionData(lines, circles, targetWidth, targetHeight, activeConfig);
+            const regionData = computeRegionData(lines, circles, curves, targetWidth, targetHeight, activeConfig);
             
             const exportRenderer = new ShaderRenderer(exportP5, p);
             exportRenderer.init();
             
             // Scale = 1.0 for full resolution export
-            exportRenderer.render(regionData, activeConfig, noiseSeed, lines, circles, 1.0);
+            exportRenderer.render(regionData, activeConfig, noiseSeed, lines, circles, curves, 1.0);
             
             const canvas = (exportP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
             downloadCanvas(canvas, `cue-${targetWidth}x${targetHeight}.png`);
@@ -245,7 +255,7 @@ const sketch = (p: p5) => {
         ui.updateProgress(`Computing regions...`);
         
         // Compute full-resolution region data once with seeded colors
-        const fullRegionData = computeRegionData(lines, circles, targetWidth, targetHeight, activeConfig);
+        const fullRegionData = computeRegionData(lines, circles, curves, targetWidth, targetHeight, activeConfig);
         
         const renderedTiles: { canvas: HTMLCanvasElement; info: TileInfo }[] = [];
         
@@ -268,7 +278,7 @@ const sketch = (p: p5) => {
                 fullResolution: { width: targetWidth, height: targetHeight },
             };
             
-            tileRenderer.render(tileRegionData, activeConfig, noiseSeed, lines, circles, 1.0, tileConfig);
+            tileRenderer.render(tileRegionData, activeConfig, noiseSeed, lines, circles, curves, 1.0, tileConfig);
             
             const tileCanvas = (tileP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
             
@@ -307,12 +317,14 @@ const sketch = (p: p5) => {
         const config = resolveConfig(undefined, dimensions);
         
         // Generate shapes at target resolution
-        const { lines: lineConfig, circles: circleConfig, colors: colorConfig } = config;
+        const { lines: lineConfig, circles: circleConfig, curves: curveConfig, colors: colorConfig } = config;
         const lineCount = densityToCount(lineConfig.density, targetWidth, targetHeight);
         const circleCount = densityToCount(circleConfig.density, targetWidth, targetHeight);
+        const curveCount = densityToCount(curveConfig.density, targetWidth, targetHeight);
         
         const lines = generateLines(p, lineCount, lineConfig, colorConfig);
         const circles = generateCircles(p, circleCount, circleConfig, colorConfig, CONFIG_TEMPLATE.circles.radius, dimensions);
+        const curves = generateCurves(p, curveCount, curveConfig, colorConfig, CONFIG_TEMPLATE.curves.radius, dimensions, targetWidth, targetHeight);
         const noiseSeed = p.random(1000);
         
         // Check if we need tiled rendering
@@ -333,13 +345,16 @@ const sketch = (p: p5) => {
             for (const circle of circles) {
                 drawCircleToBuffer(buffer, circle, targetWidth, targetHeight, 1.0);
             }
+            for (const curve of curves) {
+                drawCurveToBuffer(buffer, curve, targetWidth, targetHeight, 1.0);
+            }
             buffer.loadPixels();
             const regionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
             buffer.remove();
             
             const exportRenderer = new ShaderRenderer(exportP5, p);
             exportRenderer.init();
-            exportRenderer.render(regionData, config, noiseSeed, lines, circles, 1.0);
+            exportRenderer.render(regionData, config, noiseSeed, lines, circles, curves, 1.0);
             
             const canvas = (exportP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
             const dataUrl = canvas.toDataURL('image/png');
@@ -363,6 +378,9 @@ const sketch = (p: p5) => {
         for (const circle of circles) {
             drawCircleToBuffer(buffer, circle, targetWidth, targetHeight, 1.0);
         }
+        for (const curve of curves) {
+            drawCurveToBuffer(buffer, curve, targetWidth, targetHeight, 1.0);
+        }
         buffer.loadPixels();
         const fullRegionData = detectRegions(buffer.pixels as unknown as Uint8ClampedArray, targetWidth, targetHeight, config.colors);
         buffer.remove();
@@ -385,7 +403,7 @@ const sketch = (p: p5) => {
                 fullResolution: { width: targetWidth, height: targetHeight },
             };
             
-            tileRenderer.render(tileRegionData, config, noiseSeed, lines, circles, 1.0, tileConfig);
+            tileRenderer.render(tileRegionData, config, noiseSeed, lines, circles, curves, 1.0, tileConfig);
             
             const tileCanvas = (tileP5 as unknown as { canvas: HTMLCanvasElement }).canvas;
             
