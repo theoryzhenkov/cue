@@ -1,22 +1,50 @@
 /* Fonts (@font-face) live in index.html so Bun serves them as static assets
    at /fonts/... rather than trying to bundle the url() references at import time. */
 :root {
-    /* Palette harmonized with the home (theornet) site light theme. */
-    --cue-page: #F4F4F2;            /* desk / page background (home --color-bg) */
-    --cue-bg: #FBFBF9;             /* paper: modal + controls surface (home --color-paper) */
-    --cue-surface: #ECECE8;         /* code/table chrome (home --color-bg-subtle) */
-    --cue-surface-hover: #E2E2DC;   /* (home --color-bg-muted) */
-    --cue-border: #CFCFC7;          /* (home --color-border) */
-    --cue-text: #1F1F1C;            /* (home --color-text) */
-    --cue-text-dim: #4E4E49;        /* (home --color-text-muted) */
-    --cue-accent: #3A4E68;          /* slate blue (home --color-accent) */
+    /* Light theme — harmonized with the home (theornet) site. */
+    --cue-page: #F4F4F2;
+    --cue-bg: #FBFBF9;
+    --cue-surface: #ECECE8;
+    --cue-surface-hover: #E2E2DC;
+    --cue-border: #CFCFC7;
+    --cue-text: #1F1F1C;
+    --cue-text-dim: #4E4E49;
+    --cue-accent: #3A4E68;
     --cue-accent-hover: color-mix(in oklch, #3A4E68 80%, black);
     --cue-accent-active: color-mix(in oklch, #3A4E68 65%, black);
-    --cue-error: #8B3A3A;           /* (home --color-error) */
-    --cue-highlight: #E1E7EF;       /* (home --color-highlight) */
+    --cue-btn: #3A4E68;
+    --cue-btn-hover: color-mix(in oklch, #3A4E68 80%, black);
+    --cue-btn-active: color-mix(in oklch, #3A4E68 65%, black);
+    --cue-error: #8B3A3A;
+    --cue-highlight: #E1E7EF;
+    --cue-overlay: rgba(244, 244, 242, 0.85);
     --cue-font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
     --cue-font-serif: 'Source Serif 4', Georgia, serif;
     --cue-font-mono: 'Commit Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+    /* Dark theme — harmonized with the home (theornet) site dark palette. */
+    --cue-page: #1A1918;
+    --cue-bg: #1F1E1C;
+    --cue-surface: #242220;
+    --cue-surface-hover: #2E2B28;
+    --cue-border: #3D3A36;
+    --cue-text: #E0DDD6;
+    --cue-text-dim: #A8A39A;
+    --cue-accent: #6F88A8;
+    --cue-accent-hover: #8FA3BC;
+    --cue-accent-active: #5E7694;
+    --cue-btn: #46637D;
+    --cue-btn-hover: #5A738E;
+    --cue-btn-active: #3A526B;
+    --cue-error: #C25A5A;
+    --cue-highlight: #263B38;
+    --cue-overlay: rgba(0, 0, 0, 0.6);
+}
+
+html {
+    background-color: var(--cue-page);
 }
 
 ::selection {
@@ -28,7 +56,7 @@
 .cue-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(244, 244, 242, 0.88);
+    background: var(--cue-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -235,9 +263,30 @@
     color: var(--cue-text-dim);
 }
 
-/* API Key Section */
-.cue-api-key-section {
+/* LLM Provider Section */
+.cue-llm-section {
     margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cue-llm-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.cue-llm-row .cue-select {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 11rem;
+}
+
+.cue-input--text {
+    flex: 1;
+    width: 100%;
+    text-align: left;
 }
 
 .cue-api-key-row {
@@ -301,7 +350,7 @@
     font-family: var(--cue-font-sans);
     font-size: 0.875rem;
     font-weight: 700;
-    background: var(--cue-accent);
+    background: var(--cue-btn);
     color: #fff;
     border: none;
     border-radius: 2px;
@@ -311,11 +360,11 @@
 }
 
 .cue-generate-btn:hover {
-    background: var(--cue-accent-hover);
+    background: var(--cue-btn-hover);
 }
 
 .cue-generate-btn:active {
-    background: var(--cue-accent-active);
+    background: var(--cue-btn-active);
 }
 
 .cue-generate-btn:disabled {

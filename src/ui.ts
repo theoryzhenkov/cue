@@ -3,10 +3,10 @@
  */
 
 import { RESOLUTION_PRESETS, Resolution } from './config/constants';
-import { analyzePrompt } from './llms/promptAnalyzer';
+import { analyzePrompt, LlmConfig, LlmProvider, LLM_DEFAULTS } from './llms/promptAnalyzer';
 import { PromptDimensions, DEFAULT_DIMENSIONS, AppConfig } from './config/types';
 import { resolveConfig } from './config/seedConfig';
-import { createElement, HelpCircle, Settings, Download, Eye, EyeOff, ChevronDown } from 'lucide';
+import { createElement, HelpCircle, Settings, Download, Eye, EyeOff, ChevronDown, Sun, Moon } from 'lucide';
 import './theme/ui.css';
 
 /**
@@ -23,6 +23,8 @@ function createIconSVG(icon: any, size: number = 18): string {
 }
 
 const API_KEY_STORAGE_KEY = 'cue-anthropic-api-key';
+const LLM_CONFIG_STORAGE_KEY = 'cue-llm-config';
+const THEME_STORAGE_KEY = 'cue-theme';
 
 export interface UICallbacks {
     onGenerate: (width: number, height: number, seededConfig: AppConfig, dimensions: PromptDimensions) => void;
@@ -122,6 +124,45 @@ export class UI {
         }
     }
 
+    private getStoredLlmConfig(): { provider: LlmProvider; endpoint: string; model: string } {
+        try {
+            const raw = localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+            if (raw) {
+                const p = JSON.parse(raw);
+                if (p && (p.provider === 'anthropic' || p.provider === 'openai')
+                    && typeof p.endpoint === 'string' && typeof p.model === 'string') {
+                    return { provider: p.provider, endpoint: p.endpoint, model: p.model };
+                }
+            }
+        } catch { /* ignore */ }
+        return { provider: 'anthropic', ...LLM_DEFAULTS.anthropic };
+    }
+
+    private storeLlmConfig(provider: LlmProvider, endpoint: string, model: string): void {
+        localStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify({ provider, endpoint, model }));
+    }
+
+    private currentTheme(): 'light' | 'dark' {
+        return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    }
+
+    private setTheme(theme: 'light' | 'dark'): void {
+        const root = document.documentElement;
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+        this.updateThemeIcon();
+    }
+
+    private toggleTheme(): void {
+        this.setTheme(this.currentTheme() === 'dark' ? 'light' : 'dark');
+    }
+
+    private updateThemeIcon(): void {
+        const btn = document.querySelector('#btn-theme');
+        if (btn) btn.innerHTML = createIconSVG(this.currentTheme() === 'dark' ? Sun : Moon);
+    }
+
     private createModal(): void {
         const overlay = document.createElement('div');
         overlay.className = 'cue-modal-overlay';
@@ -130,6 +171,7 @@ export class UI {
         modal.className = 'cue-modal';
 
         const storedApiKey = this.getStoredApiKey();
+        const llmCfg = this.getStoredLlmConfig();
 
         modal.innerHTML = `
             <h1 class="cue-title">Cue</h1>
@@ -142,7 +184,6 @@ export class UI {
                     placeholder="Describe a mood, scene, or feeling..."
                     rows="3"
                 ></textarea>
-                <p class="cue-prompt-hint">Valence → colors · Arousal → complexity · Focus → sharpness</p>
             </div>
             
             <div class="cue-dimension-row">
@@ -165,15 +206,17 @@ export class UI {
                 </div>
             </div>
 
-            <div class="cue-api-key-section">
+            <div class="cue-llm-section">
+                <div class="cue-llm-row">
+                    <select class="cue-select" id="llm-provider">
+                        <option value="anthropic" ${llmCfg.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+                        <option value="openai" ${llmCfg.provider === 'openai' ? 'selected' : ''}>OpenAI-compatible</option>
+                    </select>
+                    <input type="text" class="cue-input cue-input--text" id="llm-model" placeholder="model name" value="${llmCfg.model}">
+                </div>
+                <input type="text" class="cue-input cue-input--text" id="llm-endpoint" placeholder="API base URL" value="${llmCfg.endpoint}">
                 <div class="cue-api-key-row">
-                    <input 
-                        type="password" 
-                        class="cue-api-key" 
-                        id="api-key-input" 
-                        placeholder="Anthropic API key (optional)"
-                        value="${storedApiKey}"
-                    >
+                    <input type="password" class="cue-api-key" id="api-key-input" placeholder="API key (optional)" value="${storedApiKey}">
                     <button class="cue-api-key-toggle" id="api-key-toggle" type="button">
                         ${createIconSVG(Eye, 16)}
                     </button>
@@ -181,8 +224,6 @@ export class UI {
             </div>
 
             <button class="cue-generate-btn" id="generate-btn">Send Cue</button>
-            
-            <p class="cue-hint">Click the canvas to regenerate with new colors</p>
         `;
 
         overlay.appendChild(modal);
@@ -206,6 +247,9 @@ export class UI {
         const promptInput = modal.querySelector('#prompt-input') as HTMLTextAreaElement;
         const apiKeyInput = modal.querySelector('#api-key-input') as HTMLInputElement;
         const apiKeyToggle = modal.querySelector('#api-key-toggle') as HTMLButtonElement;
+        const providerSelect = modal.querySelector('#llm-provider') as HTMLSelectElement;
+        const modelInput = modal.querySelector('#llm-model') as HTMLInputElement;
+        const endpointInput = modal.querySelector('#llm-endpoint') as HTMLInputElement;
         const generateBtn = modal.querySelector('#generate-btn') as HTMLButtonElement;
 
         presetSelect?.addEventListener('change', () => {
@@ -244,13 +288,35 @@ export class UI {
             this.storeApiKey(apiKeyInput.value.trim());
         });
 
+        providerSelect?.addEventListener('change', () => {
+            const provider = providerSelect.value as LlmProvider;
+            const d = LLM_DEFAULTS[provider];
+            if (endpointInput) endpointInput.value = d.endpoint;
+            if (modelInput) modelInput.value = d.model;
+            this.storeLlmConfig(provider, d.endpoint, d.model);
+        });
+
+        const persistLlm = () => {
+            this.storeLlmConfig(
+                (providerSelect?.value as LlmProvider) || 'anthropic',
+                endpointInput?.value.trim() || '',
+                modelInput?.value.trim() || ''
+            );
+        };
+        endpointInput?.addEventListener('blur', persistLlm);
+        modelInput?.addEventListener('blur', persistLlm);
+
         generateBtn?.addEventListener('click', async () => {
             const width = this.isCustom ? this.customWidth : this.selectedResolution.width;
             const height = this.isCustom ? this.customHeight : this.selectedResolution.height;
             const prompt = promptInput?.value.trim() || '';
             const apiKey = apiKeyInput?.value.trim() || '';
+            const provider = (providerSelect?.value as LlmProvider) || 'anthropic';
+            const endpoint = endpointInput?.value.trim() || '';
+            const model = modelInput?.value.trim() || '';
 
             this.storeApiKey(apiKey);
+            this.storeLlmConfig(provider, endpoint, model);
 
             generateBtn.disabled = true;
             generateBtn.textContent = 'Analyzing...';
@@ -258,8 +324,8 @@ export class UI {
             let dimensions: PromptDimensions;
 
             try {
-                if (prompt && apiKey) {
-                    dimensions = await analyzePrompt(prompt, apiKey);
+                if (prompt && apiKey && endpoint && model) {
+                    dimensions = await analyzePrompt(prompt, { provider, endpoint, model, apiKey });
                 } else {
                     dimensions = { ...DEFAULT_DIMENSIONS };
                 }
@@ -288,6 +354,9 @@ export class UI {
         controls.className = 'cue-controls';
 
         controls.innerHTML = `
+            <button class="cue-icon-btn" id="btn-theme" title="Toggle theme">
+                ${createIconSVG(this.currentTheme() === 'dark' ? Sun : Moon)}
+            </button>
             <button class="cue-icon-btn" id="btn-api-docs" title="API documentation">
                 ${createIconSVG(HelpCircle)}
             </button>
@@ -303,6 +372,11 @@ export class UI {
 
         document.body.appendChild(controls);
         this.controlsBar = controls;
+
+        const themeBtn = controls.querySelector('#btn-theme');
+        themeBtn?.addEventListener('click', () => {
+            this.toggleTheme();
+        });
 
         const apiDocsBtn = controls.querySelector('#btn-api-docs');
         apiDocsBtn?.addEventListener('click', () => {

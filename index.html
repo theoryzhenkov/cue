@@ -8,6 +8,16 @@
     <link rel="icon" type="image/png" href="./public/cue-256x256-cue-theor-net.png">
     <link rel="apple-touch-icon" href="./public/cue-256x256-cue-theor-net.png">
     <title>Cue · TheoR.net</title>
+    <script>
+        // Apply theme before CSS to avoid a flash. Default: dark.
+        (function () {
+            var t = localStorage.getItem('cue-theme');
+            t = (t === 'light' || t === 'dark') ? t : 'dark';
+            var r = document.documentElement;
+            r.setAttribute('data-theme', t);
+            r.style.colorScheme = t;
+        })();
+    </script>
     <style>
         /* Fonts — vendored from the home (theornet) site for visual harmony.
            Source Serif 4 (SIL OFL) + Commit Mono. Licenses in public/fonts/licenses/. */
@@ -62,8 +72,10 @@
         html, body {
             height: 100%;
             overflow: hidden;
-            background-color: #F4F4F2;
         }
+        /* Page background per theme (instant, no flash before ui.css loads). */
+        html { background-color: #1A1918; }
+        html[data-theme='light'] { background-color: #F4F4F2; }
         body {
             display: flex;
             justify-content: center;
